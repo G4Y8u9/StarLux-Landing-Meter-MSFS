@@ -1,0 +1,15 @@
+# Runtime-generated user data
+LMM_Settings.cfg
+LMM_Log/
+
+# X-Plane / FlyWithLua logs
+*.log
+FlyWithLua_Debug.txt
+
+# Local release packages
+*.zip
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
