@@ -1,6 +1,6 @@
--- StarLux 落地率插件 v0.7 相对稳定测试版
+-- StarLux 落地率插件 v0.7.1 测试版
 -- 适用于 X-Plane 12 + FlyWithLua
--- v0.7 通过初步实飞测试，整合独立设置窗口、布局/透明度选项和延迟存档。
+-- v0.7.1 新增机型、落地机场、跑道方向识别，以及报告生成完成提示。
 
 -- =========================
 -- 用户设置
@@ -20,10 +20,10 @@ local POPUP_POSITION = "middle_left"
 local POPUP_LAYOUT = "horizontal"
 -- "horizontal" = 横向数据窗，状态色粗边位于左侧
 -- "vertical"   = 竖向数据窗，状态色粗边位于上方
-local HORIZONTAL_PANEL_W = 340
-local HORIZONTAL_PANEL_H = 112
-local VERTICAL_PANEL_W = 215
-local VERTICAL_PANEL_H = 168
+local HORIZONTAL_PANEL_W = 365
+local HORIZONTAL_PANEL_H = 132
+local VERTICAL_PANEL_W = 235
+local VERTICAL_PANEL_H = 195
 local ACCENT_THICKNESS = 12
 local BORDER_ALPHA = 0.78
 local PANEL_OPACITY_LEVEL = 25
@@ -34,8 +34,11 @@ local PANEL_ALPHA_LEVELS = {
     [100] = 0.60
 }
 
--- TXT 写入延后到弹窗出现之后，避免在触地关键帧执行磁盘和日志操作。
-local LOG_WRITE_DELAY_SECONDS = 1.5
+-- 机场识别与 TXT 写入分阶段延后，避免触地关键阶段执行导航查询和磁盘操作。
+local CONTEXT_RESOLVE_DELAY_SECONDS = 3.0
+local LOG_WRITE_DELAY_SECONDS = 8.0
+local REPORT_NOTICE_SECONDS = 6.0
+local MAX_AIRPORT_DISTANCE_KM = 15.0
 
 local PATH_SEPARATOR = package.config:sub(1, 1)
 local LMM_BASE_DIRECTORY = SCRIPT_DIRECTORY or "."
@@ -107,7 +110,9 @@ local LMM_DATAREF_SPECS = {
     { key = "aoa_deg", path = "sim/flightmodel/position/alpha", kind = "float" },
     { key = "wind_speed_kts", path = "sim/cockpit2/gauges/indicators/wind_speed_kts", kind = "float" },
     { key = "wind_heading_deg_mag", path = "sim/cockpit2/gauges/indicators/wind_heading_deg_mag", kind = "float" },
-    { key = "heading_deg_mag", path = "sim/flightmodel/position/mag_psi", kind = "float" }
+    { key = "heading_deg_mag", path = "sim/flightmodel/position/mag_psi", kind = "float" },
+    { key = "latitude_deg", path = "sim/flightmodel/position/latitude", kind = "double" },
+    { key = "longitude_deg", path = "sim/flightmodel/position/longitude", kind = "double" }
 }
 
 local LMM_DATAREFS = {}
@@ -132,6 +137,12 @@ local function lmm_get_int(key)
     local handle = LMM_DATAREFS[key]
     if handle == nil then return 0 end
     return XPLMGetDatai(handle)
+end
+
+local function lmm_get_double(key)
+    local handle = LMM_DATAREFS[key]
+    if handle == nil then return 0 end
+    return XPLMGetDatad(handle)
 end
 
 if #lmm_missing_datarefs > 0 and logMsg then
@@ -182,6 +193,17 @@ local landing_heading_deg = 0
 local landing_wind_relative_text = ""
 local landing_status = "STABLE"
 local landing_timestamp = ""
+local landing_context = {
+    aircraft_icao = "UNKNOWN",
+    aircraft_file = "",
+    airport_id = "识别中",
+    airport_name = "",
+    airport_distance_km = 0,
+    runway = "--",
+    touch_latitude = 0,
+    touch_longitude = 0,
+    file_timestamp = ""
+}
 
 local debug_data = {
     last_frame_fpm = 0,
@@ -196,8 +218,16 @@ local debug_data = {
 local show_until = 0
 local taxi_popup_done = false
 local settings_window = nil
-local landing_log_pending = false
-local landing_log_write_after = 0
+local landing_jobs = {
+    context_pending = false,
+    context_after = 0,
+    log_pending = false,
+    log_after = 0
+}
+local landing_report_notice = {
+    text = "",
+    until_time = 0
+}
 
 local POSITION_OPTIONS = {
     { id = "top_left", label = "Top left" },
@@ -240,6 +270,122 @@ local function normalize_deg(deg)
     local d = deg % 360
     if d < 0 then d = d + 360 end
     return d
+end
+
+local function trim_text(value)
+    return tostring(value or ""):match("^%s*(.-)%s*$")
+end
+
+local function sanitize_filename_token(value)
+    local token = string.upper(trim_text(value)):gsub("[^%w%-]", "")
+    if token == "" or token == "UNKNOWN" then
+        return "UNKNOWN"
+    end
+    return token
+end
+
+local function estimated_runway_from_heading(heading_deg)
+    local runway_number = math.floor((normalize_deg(heading_deg) + 5) / 10)
+    if runway_number == 0 or runway_number == 36 then
+        runway_number = 36
+    elseif runway_number > 36 then
+        runway_number = runway_number - 36
+    end
+    return string.format("%02d", runway_number)
+end
+
+local function distance_km(lat1, lon1, lat2, lon2)
+    local radians = math.pi / 180
+    local d_lat = (lat2 - lat1) * radians
+    local d_lon = (lon2 - lon1) * radians
+    local a = math.sin(d_lat / 2) ^ 2
+        + math.cos(lat1 * radians) * math.cos(lat2 * radians) * math.sin(d_lon / 2) ^ 2
+    local limited_a = math.min(1, math.max(0, a))
+    return 6371.0 * 2 * math.asin(math.sqrt(limited_a))
+end
+
+local function begin_landing_context()
+    local aircraft_icao = ""
+    if type(PLANE_ICAO) == "string" then
+        aircraft_icao = string.upper(trim_text(PLANE_ICAO))
+    end
+
+    local aircraft_file = ""
+    if type(AIRCRAFT_FILENAME) == "string" then
+        aircraft_file = trim_text(AIRCRAFT_FILENAME)
+    end
+
+    if aircraft_icao == "" and aircraft_file ~= "" then
+        aircraft_icao = string.upper(aircraft_file:gsub("%.[Aa][Cc][Ff]$", ""))
+    end
+    if aircraft_icao == "" then
+        aircraft_icao = "UNKNOWN"
+    end
+
+    landing_context.aircraft_icao = aircraft_icao
+    landing_context.aircraft_file = aircraft_file
+    landing_context.airport_id = "识别中"
+    landing_context.airport_name = ""
+    landing_context.airport_distance_km = 0
+    landing_context.runway = estimated_runway_from_heading(landing_heading_deg)
+    landing_context.touch_latitude = lmm_get_double("latitude_deg")
+    landing_context.touch_longitude = lmm_get_double("longitude_deg")
+    landing_context.file_timestamp = os.date("%Y-%m-%d_%H-%M-%S")
+    landing_report_notice.text = ""
+    landing_report_notice.until_time = 0
+end
+
+local function resolve_landing_context()
+    landing_context.airport_id = "UNKNOWN"
+    landing_context.airport_name = ""
+    landing_context.airport_distance_km = 0
+    landing_context.runway = estimated_runway_from_heading(landing_heading_deg)
+
+    local nav_ref = XPLMFindNavAid(
+        nil,
+        nil,
+        landing_context.touch_latitude,
+        landing_context.touch_longitude,
+        nil,
+        xplm_Nav_Airport
+    )
+    if nav_ref == nil or nav_ref == -1 then
+        return false, "未找到附近机场"
+    end
+
+    local _, airport_lat, airport_lon, _, _, _, airport_id, airport_name = XPLMGetNavAidInfo(nav_ref)
+    airport_id = string.upper(trim_text(airport_id))
+    airport_name = trim_text(airport_name)
+    if airport_id == "" then
+        return false, "机场导航数据没有标识符"
+    end
+
+    local airport_distance = distance_km(
+        landing_context.touch_latitude,
+        landing_context.touch_longitude,
+        airport_lat,
+        airport_lon
+    )
+    if airport_distance > MAX_AIRPORT_DISTANCE_KM then
+        return false, string.format("最近机场距离 %.1f km，超过识别范围", airport_distance)
+    end
+
+    landing_context.airport_id = airport_id
+    landing_context.airport_name = airport_name
+    landing_context.airport_distance_km = airport_distance
+    return true
+end
+
+local function landing_context_short_text()
+    local airport_text = landing_context.airport_id
+    if airport_text == "识别中" then
+        return string.format("%s | 机场识别中 | RWY ~%s", landing_context.aircraft_icao, landing_context.runway)
+    end
+    return string.format("%s | %s | RWY ~%s", landing_context.aircraft_icao, airport_text, landing_context.runway)
+end
+
+local function file_name_from_path(path)
+    return tostring(path or ""):match("([^/\\]+)$") or tostring(path or "")
 end
 
 local function angular_diff_180(from_deg, to_deg)
@@ -628,7 +774,12 @@ local function position_log_label(position_id)
 end
 
 local function next_log_file_path()
-    local base_name = "LMM_" .. os.date("%Y-%m-%d_%H-%M-%S")
+    local airport_token = sanitize_filename_token(landing_context.airport_id)
+    local file_timestamp = landing_context.file_timestamp
+    if file_timestamp == "" then
+        file_timestamp = os.date("%Y-%m-%d_%H-%M-%S")
+    end
+    local base_name = "LMM_" .. airport_token .. "_" .. file_timestamp
     local suffix = 0
 
     while suffix < 1000 do
@@ -654,7 +805,10 @@ end
 local function log_landing_summary()
     if logMsg then
         logMsg(string.format(
-            "[StarLux LMM] FPM last=%d selected=%d | G touch=%.2f rawPeak=%.2f robust=%.2f cap=%.2f used=%.2f | IAS=%.0f GS=%.0f AoA=%.1f Roll=%.1f | Wind=%03d/%dkt | WindRel=%s | Mode=%s | Layout=%s",
+            "[StarLux LMM] Aircraft=%s | Airport=%s | RWY~%s | FPM last=%d selected=%d | G touch=%.2f rawPeak=%.2f robust=%.2f cap=%.2f used=%.2f | IAS=%.0f GS=%.0f AoA=%.1f Roll=%.1f | Wind=%03d/%dkt | WindRel=%s | Mode=%s | Layout=%s",
+            landing_context.aircraft_icao,
+            landing_context.airport_id,
+            landing_context.runway,
             debug_data.last_frame_fpm,
             debug_data.selected_fpm,
             landing_touch_g,
@@ -683,7 +837,7 @@ local function write_landing_log()
         if logMsg then
             logMsg("[StarLux LMM] Unable to write landing log: " .. tostring(err))
         end
-        return false
+        return false, tostring(err)
     end
 
     file:write("\239\187\191")
@@ -692,6 +846,25 @@ local function write_landing_log()
     file:write("落地时间（本地时间）: " .. landing_timestamp .. "\n")
     file:write("落地评价: " .. landing_status .. "\n")
     file:write("评价说明: " .. status_explanation(landing_status) .. "\n\n")
+
+    file:write("飞机与落地位置\n")
+    file:write("------------------------------------------------------------\n")
+    file:write("机型（ICAO）: " .. landing_context.aircraft_icao .. "\n")
+    if landing_context.aircraft_file ~= "" then
+        file:write("飞机文件: " .. landing_context.aircraft_file .. "\n")
+    end
+    if landing_context.airport_id == "UNKNOWN" then
+        file:write("落地机场: 未能识别\n")
+    else
+        local airport_name_suffix = ""
+        if landing_context.airport_name ~= "" then
+            airport_name_suffix = " - " .. landing_context.airport_name
+        end
+        file:write("落地机场: " .. landing_context.airport_id .. airport_name_suffix .. "\n")
+        file:write(string.format("触地点距机场参考点: %.1f km\n", landing_context.airport_distance_km))
+    end
+    file:write("触地跑道方向: 约 " .. landing_context.runway .. "\n")
+    file:write("跑道识别说明: 根据触地磁航向推算跑道号，暂不区分 L/R/C。\n\n")
 
     file:write("触地数据\n")
     file:write("------------------------------------------------------------\n")
@@ -727,12 +900,75 @@ local function write_landing_log()
     file:write("屏幕位置: " .. position_log_label(POPUP_POSITION) .. "\n")
     file:write("窗口布局: " .. (POPUP_LAYOUT == "vertical" and "竖向" or "横向") .. "\n")
     file:write("背景透明度档位: " .. tostring(PANEL_OPACITY_LEVEL) .. "%\n")
-    file:close()
+    local close_ok, close_error = file:close()
+    if close_ok == nil then
+        if logMsg then
+            logMsg("[StarLux LMM] Unable to finalize landing log: " .. tostring(close_error))
+        end
+        return false, tostring(close_error)
+    end
 
     if logMsg then
         logMsg("[StarLux LMM] Landing log saved: " .. log_path)
     end
-    return true
+    return true, log_path
+end
+
+local function schedule_landing_jobs(now)
+    landing_jobs.context_pending = true
+    landing_jobs.context_after = now + CONTEXT_RESOLVE_DELAY_SECONDS
+    landing_jobs.log_pending = true
+    landing_jobs.log_after = now + LOG_WRITE_DELAY_SECONDS
+end
+
+local function resolve_context_safely()
+    landing_jobs.context_pending = false
+    local call_ok, resolve_ok, reason = pcall(resolve_landing_context)
+    if not call_ok then
+        landing_context.airport_id = "UNKNOWN"
+        landing_context.airport_name = ""
+        if logMsg then
+            logMsg("[StarLux LMM] Airport lookup failed; monitoring will continue: " .. tostring(resolve_ok))
+        end
+    elseif not resolve_ok and logMsg then
+        logMsg("[StarLux LMM] Airport not identified: " .. tostring(reason))
+    elseif logMsg then
+        logMsg(string.format(
+            "[StarLux LMM] Airport identified: %s (%s), %.1f km from touchdown, estimated RWY %s",
+            landing_context.airport_id,
+            landing_context.airport_name,
+            landing_context.airport_distance_km,
+            landing_context.runway
+        ))
+    end
+end
+
+local function process_landing_jobs(now)
+    if landing_jobs.context_pending == true and now >= landing_jobs.context_after then
+        resolve_context_safely()
+    end
+
+    if landing_jobs.log_pending == true and now >= landing_jobs.log_after then
+        landing_jobs.log_pending = false
+
+        -- 正常情况下机场查询会先完成；若模拟时间发生跳变，则在写文件前补做一次。
+        if landing_jobs.context_pending == true then
+            resolve_context_safely()
+        end
+
+        log_landing_summary()
+        local call_ok, write_ok, result = pcall(write_landing_log)
+        if call_ok and write_ok then
+            landing_report_notice.text = "落地详细报告已生成: " .. file_name_from_path(result)
+            landing_report_notice.until_time = now + REPORT_NOTICE_SECONDS
+        elseif logMsg then
+            local error_text = result
+            if not call_ok then
+                error_text = write_ok
+            end
+            logMsg("[StarLux LMM] Landing log failed, but flight monitoring will continue: " .. tostring(error_text))
+        end
+    end
 end
 
 local storage_init_ok, storage_init_error = pcall(function()
@@ -963,6 +1199,7 @@ function ma_landing_meter_update()
             landing_wind_speed_kts,
             landing_heading_deg
         )
+        begin_landing_context()
 
         debug_data.last_frame_fpm = round_num(approach_data.vs_fpm)
         debug_data.selected_fpm = landing_fpm
@@ -1013,9 +1250,8 @@ function ma_landing_meter_update()
                 show_until = now + DISPLAY_SECONDS
             end
 
-            -- 触地关键帧只完成计算和显示；日志输出及 TXT 写入延后执行。
-            landing_log_pending = true
-            landing_log_write_after = now + LOG_WRITE_DELAY_SECONDS
+            -- 机场查询与 TXT 写入分别延后执行，不占用触地后的关键计算阶段。
+            schedule_landing_jobs(now)
         end
     end
 
@@ -1027,15 +1263,8 @@ function ma_landing_meter_update()
         end
     end
 
-    -- 在弹窗已经稳定显示后再保存日志，避免系统命令和磁盘 I/O 与触地首帧重叠。
-    if landing_log_pending == true and now >= landing_log_write_after then
-        landing_log_pending = false
-        log_landing_summary()
-        local log_ok, log_error = pcall(write_landing_log)
-        if not log_ok and logMsg then
-            logMsg("[StarLux LMM] Landing log failed, but flight monitoring will continue: " .. tostring(log_error))
-        end
-    end
+    -- 分阶段处理机场查询、报告写入和完成提示。
+    process_landing_jobs(now)
 
     was_on_ground = on_ground
 end
@@ -1046,76 +1275,87 @@ end
 
 function ma_landing_meter_draw()
     local now = current_sim_time()
-
-    if show_until <= 0 or now > show_until then
-        return
-    end
-
     local screen_w = SCREEN_WIDTH or 1920
     local screen_h = SCREEN_HIGHT or 1080
+    local popup_visible = show_until > 0 and now <= show_until
 
-    local panel_w = HORIZONTAL_PANEL_W
-    local panel_h = HORIZONTAL_PANEL_H
-    if POPUP_LAYOUT == "vertical" then
-        panel_w = VERTICAL_PANEL_W
-        panel_h = VERTICAL_PANEL_H
-    end
-
-    local x, y = calculate_popup_position(screen_w, screen_h, panel_w, panel_h)
-
-    local r, g, b = status_color(landing_status)
-
-    -- 恢复浅色半透明状态底板。拖影问题改由移出触地关键帧的日志写入解决，
-    -- 不再用深色不透明色块遮挡驾驶舱画面。
-    XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
-    glColor4f(r, g, b, panel_alpha())
-    glRectf(x, y, x + panel_w, y + panel_h)
-
-    glColor4f(r, g, b, 0.96)
-    if POPUP_LAYOUT == "vertical" then
-        glRectf(x, y + panel_h - ACCENT_THICKNESS, x + panel_w, y + panel_h)
-    else
-        glRectf(x, y, x + ACCENT_THICKNESS, y + panel_h)
-    end
-    draw_panel_border(x, y, panel_w, panel_h, r, g, b)
-
-    local line1 = string.format("%+d fpm | +%.2fG", landing_fpm, landing_g)
-    local line2 = string.format("IAS %.0fkt | GS %.0fkt", landing_ias_kts, landing_gs_kts)
-    local line3 = string.format("迎角 %.1f° | %s", landing_aoa_deg, format_roll_text(landing_roll_deg))
-    local line4 = landing_wind_relative_text
-    local line5 = status_short(landing_status)
-
-    local text_x = x + ACCENT_THICKNESS + 10
-    -- 横向布局使用 90/70/50/30/10 的等距基线，使上下留白更加均衡。
-    local line_y1 = y + 90
-    local line_gap = 20
-    if POPUP_LAYOUT == "vertical" then
-        -- 竖向布局已经协调，不随横向布局的基线调整而改变。
-        text_x = x + 14
-        line_y1 = y + 133
-        line_gap = 27
-    end
-
-    -- 文字只绘制一次，不使用阴影，避免小字号出现重影和模糊感。
-    glColor4f(1, 1, 1, 0.98)
-    draw_string(text_x, line_y1, line1)
-    draw_string(text_x, line_y1 - line_gap, line2)
-    draw_string(text_x, line_y1 - line_gap * 2, line3)
-    draw_string(text_x, line_y1 - line_gap * 3, line4)
-    draw_string(text_x, line_y1 - line_gap * 4, line5)
-
-    if DEBUG_MODE == true then
-        glColor4f(1, 1, 1, 0.86)
-        local debug_line1 = string.format("DBG FPM last:%d sel:%d", debug_data.last_frame_fpm, debug_data.selected_fpm)
-        local debug_line2 = string.format("DBG G touch:%.2f rawPk:%.2f", debug_data.touch_g, debug_data.peak_g)
-        local debug_line3 = string.format("DBG G rb:%.2f cap:%.2f used:%.2f", debug_data.robust_g, debug_data.expected_max_g, debug_data.used_g)
-        local debug_x = x + panel_w + 12
-        if debug_x + 270 > screen_w then
-            debug_x = math.max(0, x - 282)
+    if popup_visible then
+        local panel_w = HORIZONTAL_PANEL_W
+        local panel_h = HORIZONTAL_PANEL_H
+        if POPUP_LAYOUT == "vertical" then
+            panel_w = VERTICAL_PANEL_W
+            panel_h = VERTICAL_PANEL_H
         end
-        draw_string(debug_x, y + 70, debug_line1)
-        draw_string(debug_x, y + 48, debug_line2)
-        draw_string(debug_x, y + 26, debug_line3)
+
+        local x, y = calculate_popup_position(screen_w, screen_h, panel_w, panel_h)
+        local r, g, b = status_color(landing_status)
+
+        -- 浅色半透明状态底板；导航查询和文件写入均已移出触地关键阶段。
+        XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
+        glColor4f(r, g, b, panel_alpha())
+        glRectf(x, y, x + panel_w, y + panel_h)
+
+        glColor4f(r, g, b, 0.96)
+        if POPUP_LAYOUT == "vertical" then
+            glRectf(x, y + panel_h - ACCENT_THICKNESS, x + panel_w, y + panel_h)
+        else
+            glRectf(x, y, x + ACCENT_THICKNESS, y + panel_h)
+        end
+        draw_panel_border(x, y, panel_w, panel_h, r, g, b)
+
+        local line1 = landing_context_short_text()
+        local line2 = string.format("%+d fpm | +%.2fG", landing_fpm, landing_g)
+        local line3 = string.format("IAS %.0fkt | GS %.0fkt", landing_ias_kts, landing_gs_kts)
+        local line4 = string.format("迎角 %.1f° | %s", landing_aoa_deg, format_roll_text(landing_roll_deg))
+        local line5 = landing_wind_relative_text
+        local line6 = status_short(landing_status)
+
+        local text_x = x + ACCENT_THICKNESS + 10
+        local line_y1 = y + 108
+        local line_gap = 18
+        if POPUP_LAYOUT == "vertical" then
+            text_x = x + 14
+            line_y1 = y + 162
+            line_gap = 27
+        end
+
+        -- 六行文字使用均匀基线且不绘制阴影，兼顾横向和竖向布局。
+        glColor4f(1, 1, 1, 0.98)
+        draw_string(text_x, line_y1, line1)
+        draw_string(text_x, line_y1 - line_gap, line2)
+        draw_string(text_x, line_y1 - line_gap * 2, line3)
+        draw_string(text_x, line_y1 - line_gap * 3, line4)
+        draw_string(text_x, line_y1 - line_gap * 4, line5)
+        draw_string(text_x, line_y1 - line_gap * 5, line6)
+
+        if DEBUG_MODE == true then
+            glColor4f(1, 1, 1, 0.86)
+            local debug_line1 = string.format("DBG FPM last:%d sel:%d", debug_data.last_frame_fpm, debug_data.selected_fpm)
+            local debug_line2 = string.format("DBG G touch:%.2f rawPk:%.2f", debug_data.touch_g, debug_data.peak_g)
+            local debug_line3 = string.format("DBG G rb:%.2f cap:%.2f used:%.2f", debug_data.robust_g, debug_data.expected_max_g, debug_data.used_g)
+            local debug_x = x + panel_w + 12
+            if debug_x + 270 > screen_w then
+                debug_x = math.max(0, x - 282)
+            end
+            draw_string(debug_x, y + 70, debug_line1)
+            draw_string(debug_x, y + 48, debug_line2)
+            draw_string(debug_x, y + 26, debug_line3)
+        end
+    end
+
+    -- 报告完成提示独立于落地数据窗，写入成功后显示数秒。
+    if landing_report_notice.until_time > now and landing_report_notice.text ~= "" then
+        local notice_w = math.min(500, screen_w - 40)
+        local notice_h = 36
+        local notice_x = math.floor((screen_w - notice_w) / 2)
+        local notice_y = 38
+
+        XPLMSetGraphicsState(0, 0, 0, 1, 1, 0, 0)
+        glColor4f(0.03, 0.16, 0.09, 0.78)
+        glRectf(notice_x, notice_y, notice_x + notice_w, notice_y + notice_h)
+        draw_panel_border(notice_x, notice_y, notice_w, notice_h, 0.08, 0.50, 0.24)
+        glColor4f(1, 1, 1, 0.98)
+        draw_string(notice_x + 12, notice_y + 12, landing_report_notice.text)
     end
 end
 
@@ -1124,7 +1364,7 @@ do_every_draw("ma_landing_meter_draw()")
 
 if logMsg then
     logMsg(string.format(
-        "[StarLux LMM] v0.7 loaded successfully with %d direct XPLM DataRefs.",
+        "[StarLux LMM] v0.7.1 test loaded successfully with %d direct XPLM DataRefs.",
         #LMM_DATAREF_SPECS
     ))
 end
