@@ -1,6 +1,6 @@
--- StarLux 落地率插件 v1.0 正式版
+-- StarLux 落地率插件 v1.1 正式版
 -- 适用于 X-Plane 12 + FlyWithLua
--- v1.0 正式版统一浏览器报告阅读器，并完成核心算法、可视化、数据对比与日志管理功能。
+-- v1.1 新增三链 FPM 验证、VVI 安全回退、回放隔离与更完整的弹窗控制。
 
 -- =========================
 -- 用户设置
@@ -9,12 +9,15 @@
 local POPUP_MODE = "immediate"
 -- "immediate" = 落地分析完成后立即显示
 -- "taxi"      = 地速降低到 30 节以下时显示
+-- "stopped"   = 飞机停稳并持续 10 秒后显示
+-- "off"       = 不自动显示落地数据窗
 
 local DISPLAY_SECONDS = 30
 local DETAILED_MATH_LOG = false
 -- false = 输出 v0.8.0 风格的简洁专业报告；true = 追加可完整复算的数学审计内容。
--- 第一次起落架压缩最多采集 0.35 秒；满足停止或反弹条件时会提前结束。
-local IMPACT_CAPTURE_MAX_SECONDS = 0.35
+-- 某些长行程起落架在 0.35 秒时仍未完成第一次压缩，因此把安全上限延长到 1.20 秒。
+-- 满足停止或反弹条件时仍会提前结束；若到达上限，报告会明确记录超时原因。
+local IMPACT_CAPTURE_MAX_SECONDS = 1.20
 local PRE_TOUCH_BUFFER_SECONDS = 0.50
 -- 触地状态可能比实际接触晚一至数帧；使用触地前 250 毫秒物理速度的第 25 百分位，避开末端接近零的滞后样本。
 local PHYSICAL_FPM_WINDOW_SECONDS = 0.25
@@ -25,6 +28,9 @@ local G_BASELINE_WINDOW_SECONDS = 0.20
 local IMPACT_STOP_VY_MPS = -0.05
 local IMPACT_STOP_STABLE_FRAMES = 3
 local TAXI_POPUP_SPEED_KT = 30
+
+-- v1.1 第三条 FPM 验证链：用触地前 AGL 高度随时间的稳健斜率验证 local_vy。
+-- AGL 链仅负责交叉验证，不直接替代用户看到的 VVI 或物理值。
 
 -- 拉平曲率首版只显示和记录，不参与落地评分。
 -- 10 Hz 原始采样在分析阶段聚合为 0.5 秒轨迹点，降低帧率和瞬时噪声的影响。
@@ -111,6 +117,8 @@ local SAMPLE_BUFFER_SIZE = 256
 local MATH_AUDIT_SAMPLE_MAX = SAMPLE_BUFFER_SIZE
 local SECOND_TOUCH_AUDIT_SAMPLE_MAX = SAMPLE_BUFFER_SIZE
 local G_CURVE_PERCENTILE = 0.75
+-- 中可信度使用短窗局部包络保留真实压缩段，避免长行程起落架把短暂峰值稀释掉。
+-- 窗口内仍取 P75，因此单帧尖峰不会直接成为最终 G。
 local HIGH_G_DURATION_MIN_SECONDS = 0.030
 local CONSISTENCY_HIGH_MAX_ERROR = 0.25
 local CONSISTENCY_MEDIUM_MAX_ERROR = 0.60
@@ -162,6 +170,7 @@ local LMM_DATAREF_SPECS = {
     { key = "pitch_deg", path = "sim/flightmodel/position/theta", kind = "float" },
     { key = "groundspeed_mps", path = "sim/flightmodel/position/groundspeed", kind = "float" },
     { key = "running_time_sec", path = "sim/time/total_running_time_sec", kind = "float" },
+    { key = "is_in_replay", path = "sim/time/is_in_replay", kind = "int" },
     { key = "ias_kts", path = "sim/cockpit2/gauges/indicators/airspeed_kts_pilot", kind = "float" },
     { key = "tas_kts", path = "sim/cockpit2/gauges/indicators/true_airspeed_kts_pilot", kind = "float" },
     { key = "aoa_deg", path = "sim/flightmodel/position/alpha", kind = "float" },
@@ -247,6 +256,7 @@ for i = 1, SAMPLE_BUFFER_SIZE do
         g_normal = 1,
         pitch_deg = 0,
         roll_deg = 0,
+        agl_m = 0,
         on_ground = 0
     }
 end
@@ -272,6 +282,7 @@ for i = 1, MATH_AUDIT_SAMPLE_MAX do
         projected_g = 0,
         pitch_deg = 0,
         roll_deg = 0,
+        agl_m = 0,
         on_ground = 0
     }
 end
@@ -284,6 +295,7 @@ for i = 1, SECOND_TOUCH_AUDIT_SAMPLE_MAX do
         projected_g = 0,
         pitch_deg = 0,
         roll_deg = 0,
+        agl_m = 0,
         on_ground = 0
     }
 end
@@ -309,6 +321,7 @@ for i = 1, FLARE_CONFIG.max_samples do
         agl_ft = 0,
         physical_fpm = 0,
         vvi_fpm = 0,
+        selected_fpm = 0,
         ias_kts = 0,
         gs_kts = 0,
         pitch_deg = 0,
@@ -323,6 +336,7 @@ for i = 1, FLARE_CONFIG.max_buckets do
         agl_ft = 0,
         physical_fpm = 0,
         vvi_fpm = 0,
+        selected_fpm = 0,
         ias_kts = 0,
         gs_kts = 0,
         pitch_deg = 0,
@@ -369,6 +383,22 @@ local bounce_state = {
 }
 
 local landing_analysis = {
+    fpm_validation = {
+        agl_window_seconds = PHYSICAL_FPM_WINDOW_SECONDS,
+        agl_end_guard_seconds = 0.04,
+        agl_min_span_seconds = 0.16,
+        agl_min_samples = 4,
+        agl_min_pair_gap_seconds = 0.035,
+        agl_max_samples = 64,
+        terminal_agl_ft = 5.0,
+        max_pair_difference_fpm = 60
+    },
+    g_local_event = {
+        window_seconds = 0.160,
+        min_span_seconds = 0.040,
+        min_samples = 5,
+        percentile = 0.75
+    },
     phase = "idle",
     touch_time = 0,
     impact_start_time = 0,
@@ -377,18 +407,42 @@ local landing_analysis = {
     capture_deadline = 0,
     stop_stable_frames = 0,
     stop_candidate_time = 0,
+    capture_end_reason = "等待采集",
     vvi_fpm = 0,
     vvi_min_fpm = 0,
+    vvi_fpm_valid = false,
+    vvi_sample_count = 0,
     physical_fpm = 0,
     physical_short_fpm = 0,
     fpm_difference = 0,
     physical_fpm_valid = false,
     physical_sample_count = 0,
+    agl_fpm = 0,
+    agl_fit_times = {},
+    agl_fit_values = {},
+    agl_fpm_valid = false,
+    agl_sample_count = 0,
+    agl_pair_count = 0,
+    agl_sample_span_seconds = 0,
+    agl_physical_difference = 0,
+    agl_vvi_difference = 0,
+    fpm_max_pair_difference = 0,
+    fpm_confidence = "LOW",
+    fpm_method = "等待三链验证",
+    flare_fpm_source = "VVI",
     pre_vy_mps = 0,
     post_vy_mps = 0,
     velocity_delta_mps = 0,
     baseline_g = 1,
     curve_g = 1,
+    local_event_g = 1,
+    local_event_g_valid = false,
+    local_event_window_start_time = 0,
+    local_event_window_end_time = 0,
+    local_event_window_span_seconds = 0,
+    local_event_sample_count = 0,
+    local_event_percentile_index = 0,
+    robust_event_g = 1,
     equivalent_g = 1,
     impulse_delta_mps = 0,
     consistency_error = 1,
@@ -466,7 +520,13 @@ local debug_data = {
 }
 
 local show_until = 0
-local taxi_popup_done = false
+local runtime_state = {
+    deferred_popup_done = false,
+    stopped_popup_since = 0,
+    stopped_speed_kt = 1.0,
+    stopped_hold_seconds = 10.0,
+    replay_active = false
+}
 local settings_window = nil
 local log_manager_window = nil
 -- 新增文件管理函数统一放入表中，避免 Lua 5.1 主代码块超过 200 个局部变量上限。
@@ -925,7 +985,7 @@ local function reset_sample_buffer()
     sample_buffer.count = 0
 end
 
-local function add_flight_sample(now, vvi_fpm, local_vy_mps, g_normal, pitch_deg, roll_deg, on_ground)
+local function add_flight_sample(now, vvi_fpm, local_vy_mps, g_normal, pitch_deg, roll_deg, agl_m, on_ground)
     local next_index = sample_buffer.write_index + 1
     if next_index > SAMPLE_BUFFER_SIZE then next_index = 1 end
 
@@ -936,6 +996,7 @@ local function add_flight_sample(now, vvi_fpm, local_vy_mps, g_normal, pitch_deg
     slot.g_normal = sanitize_g(g_normal) or 0
     slot.pitch_deg = pitch_deg
     slot.roll_deg = roll_deg
+    slot.agl_m = agl_m
     slot.on_ground = on_ground
 
     sample_buffer.write_index = next_index
@@ -986,6 +1047,7 @@ local function capture_math_audit_range(target, maximum, start_time, end_time)
                 slot.projected_g = projected_vertical_g(sample) or 0
                 slot.pitch_deg = sample.pitch_deg
                 slot.roll_deg = sample.roll_deg
+                slot.agl_m = sample.agl_m
                 slot.on_ground = sample.on_ground
             end
         end
@@ -1235,6 +1297,7 @@ local function analyze_flare_curve()
     local started = os.clock()
     flare_analysis.valid = false
     flare_analysis.touchdown_fpm = landing_fpm
+    local use_physical_curve = landing_analysis.flare_fpm_source == "PHYSICAL"
     if flare_trace.start_time > 0 then
         flare_analysis.duration_seconds = math.max(0, flare_trace.touch_time - flare_trace.start_time)
     else
@@ -1248,6 +1311,7 @@ local function analyze_flare_curve()
         bucket.agl_ft = 0
         bucket.physical_fpm = 0
         bucket.vvi_fpm = 0
+        bucket.selected_fpm = 0
         bucket.ias_kts = 0
         bucket.gs_kts = 0
         bucket.pitch_deg = 0
@@ -1279,6 +1343,8 @@ local function analyze_flare_curve()
         bucket.agl_ft = bucket.agl_ft + sample.agl_ft
         bucket.physical_fpm = bucket.physical_fpm + sample.physical_fpm
         bucket.vvi_fpm = bucket.vvi_fpm + sample.vvi_fpm
+        bucket.selected_fpm = bucket.selected_fpm
+            + (use_physical_curve and sample.physical_fpm or sample.vvi_fpm)
         bucket.ias_kts = bucket.ias_kts + sample.ias_kts
         bucket.gs_kts = bucket.gs_kts + sample.gs_kts
         bucket.pitch_deg = bucket.pitch_deg + sample.pitch_deg
@@ -1298,6 +1364,7 @@ local function analyze_flare_curve()
                 target.agl_ft = source.agl_ft
                 target.physical_fpm = source.physical_fpm
                 target.vvi_fpm = source.vvi_fpm
+                target.selected_fpm = source.selected_fpm
                 target.ias_kts = source.ias_kts
                 target.gs_kts = source.gs_kts
                 target.pitch_deg = source.pitch_deg
@@ -1310,6 +1377,7 @@ local function analyze_flare_curve()
             target.agl_ft = target.agl_ft / count
             target.physical_fpm = target.physical_fpm / count
             target.vvi_fpm = target.vvi_fpm / count
+            target.selected_fpm = target.selected_fpm / count
             target.ias_kts = target.ias_kts / count
             target.gs_kts = target.gs_kts / count
             target.pitch_deg = target.pitch_deg / count
@@ -1334,8 +1402,10 @@ local function analyze_flare_curve()
         touch_bucket.count = 1
         touch_bucket.t = flare_trace.touch_time
         touch_bucket.agl_ft = 0
-        touch_bucket.physical_fpm = landing_fpm
+        touch_bucket.physical_fpm = landing_analysis.physical_fpm_valid
+            and landing_analysis.physical_fpm or landing_analysis.vvi_fpm
         touch_bucket.vvi_fpm = landing_analysis.vvi_fpm
+        touch_bucket.selected_fpm = landing_fpm
         touch_bucket.ias_kts = landing_ias_kts
         touch_bucket.gs_kts = landing_gs_kts
         touch_bucket.pitch_deg = approach_data.pitch_deg
@@ -1344,12 +1414,15 @@ local function analyze_flare_curve()
     else
         last_bucket.t = flare_trace.touch_time
         last_bucket.agl_ft = 0
-        last_bucket.physical_fpm = landing_fpm
+        last_bucket.physical_fpm = landing_analysis.physical_fpm_valid
+            and landing_analysis.physical_fpm or landing_analysis.vvi_fpm
+        last_bucket.vvi_fpm = landing_analysis.vvi_fpm
+        last_bucket.selected_fpm = landing_fpm
     end
     flare_trace.bucket_count = compact_count
 
-    local entry_fpm = flare_trace.buckets[1].physical_fpm
-    local touch_fpm = flare_trace.buckets[compact_count].physical_fpm
+    local entry_fpm = flare_trace.buckets[1].selected_fpm
+    local touch_fpm = flare_trace.buckets[compact_count].selected_fpm
     local total_variation = 0
     local worsening_count = 0
     local reversal_count = 0
@@ -1360,8 +1433,8 @@ local function analyze_flare_curve()
     sort_scratch_count = 0
 
     for i = 2, compact_count do
-        local delta = flare_trace.buckets[i].physical_fpm
-            - flare_trace.buckets[i - 1].physical_fpm
+        local delta = flare_trace.buckets[i].selected_fpm
+            - flare_trace.buckets[i - 1].selected_fpm
         total_variation = total_variation + abs_value(delta)
         local direction = 0
         if delta > FLARE_CONFIG.reversal_noise_fpm then
@@ -1383,8 +1456,8 @@ local function analyze_flare_curve()
         local dt1 = p2.t - p1.t
         local dt2 = p3.t - p2.t
         if dt1 > 0.10 and dt2 > 0.10 then
-            local slope1 = (p2.physical_fpm - p1.physical_fpm) / dt1
-            local slope2 = (p3.physical_fpm - p2.physical_fpm) / dt2
+            local slope1 = (p2.selected_fpm - p1.selected_fpm) / dt1
+            local slope2 = (p3.selected_fpm - p2.selected_fpm) / dt2
             local curvature = (slope2 - slope1) / ((dt1 + dt2) * 0.5)
             curvature_count = curvature_count + 1
             signed_curvature_sum = signed_curvature_sum + curvature
@@ -1404,7 +1477,7 @@ local function analyze_flare_curve()
     local late_reference_fpm = entry_fpm
     for i = 1, compact_count do
         if flare_trace.buckets[i].t <= late_target_time then
-            late_reference_fpm = flare_trace.buckets[i].physical_fpm
+            late_reference_fpm = flare_trace.buckets[i].selected_fpm
         end
     end
 
@@ -1442,6 +1515,108 @@ local function analyze_flare_curve()
     end
 
     flare_analysis.calculation_ms = (os.clock() - started) * 1000
+end
+
+-- 收集 5 ft 以下终端窗口中的物理速度或 VVI，供三条独立测量链使用。
+-- 三链必须使用相同高度和时间范围，避免用不同阶段的数据互相验证。
+function log_tools.collect_terminal_fpm_values(touch_time, value_kind)
+    local start_time = touch_time - landing_analysis.fpm_validation.agl_window_seconds
+    local end_time = touch_time - landing_analysis.fpm_validation.agl_end_guard_seconds
+    local max_agl_m = landing_analysis.fpm_validation.terminal_agl_ft / 3.28084
+    local count = 0
+    local old_count = sort_scratch_count
+
+    for i = 1, sample_buffer.count do
+        local sample = sample_at(i)
+        if sample.on_ground == 0
+            and sample.t >= start_time
+            and sample.t <= end_time
+            and sample.agl_m >= 0
+            and sample.agl_m <= max_agl_m then
+            local value = nil
+            if value_kind == "local_vy" then
+                value = sample.local_vy_mps
+            elseif value_kind == "vvi" then
+                value = sample.vvi_fpm
+            end
+            if value ~= nil then
+                count = count + 1
+                sort_scratch[count] = value
+            end
+        end
+    end
+
+    for i = count + 1, old_count do
+        sort_scratch[i] = nil
+    end
+    sort_scratch_count = count
+    if count > 1 then table.sort(sort_scratch) end
+    return count
+end
+
+-- 第三条验证链使用 Theil-Sen 中位斜率：把 5 ft 以下 AGL 高度变化换算为下降率。
+-- 它对少量高度跳点和跑道网格噪声不敏感，并且只在着陆分析阶段计算一次。
+function log_tools.calculate_agl_closure_fpm(touch_time)
+    local start_time = touch_time - landing_analysis.fpm_validation.agl_window_seconds
+    local end_time = touch_time - landing_analysis.fpm_validation.agl_end_guard_seconds
+    local max_agl_m = landing_analysis.fpm_validation.terminal_agl_ft / 3.28084
+    local count = 0
+
+    for i = 1, sample_buffer.count do
+        local sample = sample_at(i)
+        if sample.on_ground == 0
+            and sample.t >= start_time
+            and sample.t <= end_time
+            and sample.agl_m >= 0
+            and sample.agl_m <= max_agl_m
+            and count < landing_analysis.fpm_validation.agl_max_samples then
+            count = count + 1
+            landing_analysis.agl_fit_times[count] = sample.t
+            landing_analysis.agl_fit_values[count] = sample.agl_m
+        end
+    end
+
+    landing_analysis.agl_sample_count = count
+    if count < landing_analysis.fpm_validation.agl_min_samples then
+        return nil
+    end
+
+    local span = landing_analysis.agl_fit_times[count] - landing_analysis.agl_fit_times[1]
+    landing_analysis.agl_sample_span_seconds = math.max(0, span)
+    if span < landing_analysis.fpm_validation.agl_min_span_seconds then
+        return nil
+    end
+
+    local old_scratch_count = sort_scratch_count
+    sort_scratch_count = 0
+    for i = 1, count - 1 do
+        for j = i + 1, count do
+            local dt = landing_analysis.agl_fit_times[j] - landing_analysis.agl_fit_times[i]
+            if dt >= landing_analysis.fpm_validation.agl_min_pair_gap_seconds then
+                sort_scratch_count = sort_scratch_count + 1
+                sort_scratch[sort_scratch_count] =
+                    (landing_analysis.agl_fit_values[j] - landing_analysis.agl_fit_values[i]) / dt
+            end
+        end
+    end
+
+    landing_analysis.agl_pair_count = sort_scratch_count
+    if sort_scratch_count < 3 then
+        for i = sort_scratch_count + 1, old_scratch_count do
+            sort_scratch[i] = nil
+        end
+        return nil
+    end
+
+    table.sort(sort_scratch)
+    local slope_mps = scratch_median()
+    for i = sort_scratch_count + 1, old_scratch_count do
+        sort_scratch[i] = nil
+    end
+    if slope_mps == nil or slope_mps < -20 or slope_mps > 3 then
+        return nil
+    end
+    return slope_mps * 196.850394
 end
 
 local function select_min_vvi_fpm(touch_time)
@@ -1492,18 +1667,40 @@ local function begin_landing_analysis(now)
     landing_analysis.capture_deadline = now + IMPACT_CAPTURE_MAX_SECONDS
     landing_analysis.stop_stable_frames = 0
     landing_analysis.stop_candidate_time = 0
+    landing_analysis.capture_end_reason = "正在采集"
     landing_analysis.vvi_fpm = 0
     landing_analysis.vvi_min_fpm = 0
+    landing_analysis.vvi_fpm_valid = false
+    landing_analysis.vvi_sample_count = 0
     landing_analysis.physical_fpm = 0
     landing_analysis.physical_short_fpm = 0
     landing_analysis.fpm_difference = 0
     landing_analysis.physical_fpm_valid = false
     landing_analysis.physical_sample_count = 0
+    landing_analysis.agl_fpm = 0
+    landing_analysis.agl_fpm_valid = false
+    landing_analysis.agl_sample_count = 0
+    landing_analysis.agl_pair_count = 0
+    landing_analysis.agl_sample_span_seconds = 0
+    landing_analysis.agl_physical_difference = 0
+    landing_analysis.agl_vvi_difference = 0
+    landing_analysis.fpm_max_pair_difference = 0
+    landing_analysis.fpm_confidence = "LOW"
+    landing_analysis.fpm_method = "等待三链验证"
+    landing_analysis.flare_fpm_source = "VVI"
     landing_analysis.pre_vy_mps = 0
     landing_analysis.post_vy_mps = 0
     landing_analysis.velocity_delta_mps = 0
     landing_analysis.baseline_g = 1
     landing_analysis.curve_g = 1
+    landing_analysis.local_event_g = 1
+    landing_analysis.local_event_g_valid = false
+    landing_analysis.local_event_window_start_time = 0
+    landing_analysis.local_event_window_end_time = 0
+    landing_analysis.local_event_window_span_seconds = 0
+    landing_analysis.local_event_sample_count = 0
+    landing_analysis.local_event_percentile_index = 0
+    landing_analysis.robust_event_g = 1
     landing_analysis.equivalent_g = 1
     landing_analysis.impulse_delta_mps = 0
     landing_analysis.consistency_error = 1
@@ -1535,34 +1732,73 @@ local function analyze_landing_velocity()
         landing_analysis.physical_short_fpm = short_physical_vy * 196.850394
     end
 
-    local physical_count = collect_sample_values(
-        math.max(buffer_start_time, touch_time - PHYSICAL_FPM_WINDOW_SECONDS),
-        touch_time,
-        "local_vy",
-        true
-    )
+    local physical_count = log_tools.collect_terminal_fpm_values(touch_time, "local_vy")
     local physical_vy = scratch_percentile(PHYSICAL_FPM_PERCENTILE)
     landing_analysis.physical_sample_count = physical_count
     landing_analysis.physical_fpm_valid = physical_count >= 3 and physical_vy ~= nil
 
-    collect_sample_values(
-        math.max(buffer_start_time, touch_time - PHYSICAL_FPM_WINDOW_SECONDS),
-        touch_time,
-        "vvi",
-        true
-    )
+    local vvi_count = log_tools.collect_terminal_fpm_values(touch_time, "vvi")
     landing_analysis.vvi_fpm = scratch_median() or approach_data.vs_fpm
+    landing_analysis.vvi_sample_count = vvi_count
+    landing_analysis.vvi_fpm_valid = vvi_count >= 3
     landing_analysis.vvi_min_fpm = select_min_vvi_fpm(touch_time)
 
     if landing_analysis.physical_fpm_valid then
         landing_analysis.physical_fpm = physical_vy * 196.850394
-        landing_fpm = round_num(landing_analysis.physical_fpm)
     else
-        landing_analysis.physical_fpm = landing_analysis.vvi_fpm
+        landing_analysis.physical_fpm = 0
+    end
+
+    local agl_fpm = log_tools.calculate_agl_closure_fpm(touch_time)
+    landing_analysis.agl_fpm_valid = agl_fpm ~= nil
+    landing_analysis.agl_fpm = agl_fpm or 0
+
+    landing_analysis.fpm_difference =
+        landing_analysis.physical_fpm - landing_analysis.vvi_fpm
+
+    if landing_analysis.physical_fpm_valid
+        and landing_analysis.vvi_fpm_valid
+        and landing_analysis.agl_fpm_valid then
+        landing_analysis.agl_physical_difference =
+            landing_analysis.physical_fpm - landing_analysis.agl_fpm
+        landing_analysis.agl_vvi_difference =
+            landing_analysis.vvi_fpm - landing_analysis.agl_fpm
+        landing_analysis.fpm_max_pair_difference = math.max(
+            abs_value(landing_analysis.fpm_difference),
+            abs_value(landing_analysis.agl_physical_difference),
+            abs_value(landing_analysis.agl_vvi_difference)
+        )
+
+        if landing_analysis.fpm_max_pair_difference
+            <= landing_analysis.fpm_validation.max_pair_difference_fpm then
+            landing_analysis.fpm_confidence = "HIGH"
+            landing_analysis.fpm_method = "三项终端测量结果一致，采用物理轨迹下降率"
+            landing_analysis.flare_fpm_source = "PHYSICAL"
+            landing_fpm = round_num(landing_analysis.physical_fpm)
+        elseif abs_value(landing_analysis.agl_vvi_difference)
+            <= landing_analysis.fpm_validation.max_pair_difference_fpm then
+            landing_analysis.fpm_confidence = "MEDIUM"
+            landing_analysis.fpm_method = "终端测量出现差异，VVI与几何轨迹相互接近，采用VVI下降率"
+            landing_analysis.flare_fpm_source = "VVI"
+            landing_fpm = round_num(landing_analysis.vvi_fpm)
+        else
+            landing_analysis.fpm_confidence = "LOW"
+            landing_analysis.fpm_method = "终端测量结果分散，采用VVI下降率并保留全部对照值"
+            landing_analysis.flare_fpm_source = "VVI"
+            landing_fpm = round_num(landing_analysis.vvi_fpm)
+        end
+    else
+        landing_analysis.agl_physical_difference = 0
+        landing_analysis.agl_vvi_difference = 0
+        landing_analysis.fpm_max_pair_difference = 0
+        landing_analysis.fpm_confidence = "LOW"
+        landing_analysis.fpm_method = "终端测量样本不足，采用VVI下降率并保留全部对照值"
+        landing_analysis.flare_fpm_source = "VVI"
         landing_fpm = round_num(landing_analysis.vvi_fpm)
     end
 
-    -- 250 毫秒分位值用于落地率显示和评分；冲量只对应第一次压缩，必须使用紧邻接地的短窗速度。
+    -- 显示和评分只在 5 ft 以下三链全部通过时采用 250 ms 物理分位值；其余情况临时采用同窗 VVI。
+    -- 冲量仍对应第一次压缩，必须使用紧邻接地的短窗物理速度。
     if short_count >= 2 and short_physical_vy ~= nil then
         landing_analysis.pre_vy_mps = short_physical_vy
     elseif landing_analysis.physical_fpm_valid then
@@ -1571,7 +1807,6 @@ local function analyze_landing_velocity()
         landing_analysis.pre_vy_mps = landing_analysis.vvi_fpm * 0.00508
     end
 
-    landing_analysis.fpm_difference = landing_analysis.physical_fpm - landing_analysis.vvi_fpm
 
     collect_sample_values(
         math.max(buffer_start_time, touch_time - G_BASELINE_WINDOW_SECONDS),
@@ -1600,6 +1835,81 @@ local function analyze_landing_velocity()
     landing_analysis.analysis_ms = landing_analysis.analysis_ms + (os.clock() - started) * 1000
 end
 
+-- 在完整压缩区间内寻找最强的 160 ms 局部 P75 包络。
+-- 这样既保留持续数帧的真实冲击，也不会让单帧原始峰值直接接管结果。
+function log_tools.calculate_local_event_g(start_time, end_time)
+    local best_g = nil
+    local best_start = 0
+    local best_end = 0
+    local best_span = 0
+    local best_count = 0
+    local best_index = 0
+
+    for i = 1, sample_buffer.count do
+        local first_sample = sample_at(i)
+        if first_sample.t >= start_time and first_sample.t <= end_time then
+            local window_start = first_sample.t
+            local window_end = math.min(
+                end_time,
+                window_start + landing_analysis.g_local_event.window_seconds
+            )
+            local count = 0
+            local first_valid_time = nil
+            local last_valid_time = nil
+            local old_count = sort_scratch_count
+
+            for j = i, sample_buffer.count do
+                local sample = sample_at(j)
+                if sample.t > window_end then break end
+                if sample.t >= window_start then
+                    local value = projected_vertical_g(sample)
+                    if value ~= nil then
+                        count = count + 1
+                        sort_scratch[count] = value
+                        if first_valid_time == nil then first_valid_time = sample.t end
+                        last_valid_time = sample.t
+                    end
+                end
+            end
+
+            for j = count + 1, old_count do
+                sort_scratch[j] = nil
+            end
+            sort_scratch_count = count
+            if count > 1 then table.sort(sort_scratch) end
+
+            local span = first_valid_time ~= nil and last_valid_time - first_valid_time or 0
+            if count >= landing_analysis.g_local_event.min_samples
+                and span >= landing_analysis.g_local_event.min_span_seconds then
+                local event_g = scratch_percentile(landing_analysis.g_local_event.percentile)
+                if event_g ~= nil and (best_g == nil or event_g > best_g) then
+                    best_g = event_g
+                    best_start = first_valid_time
+                    best_end = last_valid_time
+                    best_span = span
+                    best_count = count
+                    best_index = math.max(
+                        1,
+                        math.ceil(count * landing_analysis.g_local_event.percentile)
+                    )
+                end
+            end
+        end
+    end
+
+    landing_analysis.local_event_g_valid = best_g ~= nil
+    landing_analysis.local_event_g = best_g or landing_analysis.curve_g
+    landing_analysis.local_event_window_start_time = best_start
+    landing_analysis.local_event_window_end_time = best_end
+    landing_analysis.local_event_window_span_seconds = best_span
+    landing_analysis.local_event_sample_count = best_count
+    landing_analysis.local_event_percentile_index = best_index
+    landing_analysis.robust_event_g = math.max(
+        landing_analysis.curve_g,
+        landing_analysis.local_event_g
+    )
+end
+
 local function analyze_landing_impulse()
     local started = os.clock()
     local touch_time = landing_analysis.impact_start_time
@@ -1614,6 +1924,7 @@ local function analyze_landing_impulse()
         if sort_scratch[i] > peak_g then peak_g = sort_scratch[i] end
     end
     landing_peak_g = peak_g
+    log_tools.calculate_local_event_g(touch_time, end_time)
 
     local high_threshold = landing_analysis.baseline_g
         + math.max(0, peak_g - landing_analysis.baseline_g) * 0.80
@@ -1684,13 +1995,26 @@ local function analyze_landing_impulse()
         and high_duration > 0 then
         landing_analysis.confidence = "MEDIUM"
         landing_analysis.used_fallback = false
-        landing_analysis.method = "中可信冲量，曲线G与等效G加权"
-        landing_g = landing_analysis.curve_g * 0.65 + landing_analysis.equivalent_g * 0.35
+        landing_analysis.method = landing_analysis.local_event_g_valid
+            and "中可信冲量，采用全局P75与160ms局部冲击包络的较大值"
+            or "中可信冲量，局部包络样本不足，采用全局第75百分位曲线G"
+        landing_g = landing_analysis.robust_event_g
     else
         landing_analysis.confidence = "LOW"
         landing_analysis.used_fallback = false
         landing_analysis.method = "低可信峰值，主要采用冲量等效G"
         landing_g = landing_analysis.curve_g * 0.25 + landing_analysis.equivalent_g * 0.75
+    end
+
+    -- 达到安全上限表示长行程起落架仍未完全稳定，不能宣称高可信；
+    -- 超时只说明起落架尚未完全稳定，不应让后续低载荷样本稀释真实压缩段。
+    if landing_analysis.capture_end_reason == "达到1.20秒安全采集上限" then
+        landing_analysis.confidence = "MEDIUM"
+        landing_analysis.used_fallback = false
+        landing_analysis.method = landing_analysis.local_event_g_valid
+            and "长行程压缩达到采集上限，采用全局P75与160ms局部冲击包络的较大值"
+            or "长行程压缩达到采集上限，局部包络样本不足，采用全局第75百分位曲线G"
+        landing_g = landing_analysis.robust_event_g
     end
 
     landing_g = math.max(1.0, math.min(5.0, landing_g))
@@ -1800,7 +2124,8 @@ local function load_settings()
             if value == "touchdown" then
                 POPUP_MODE = "immediate"
                 migrated = true
-            elseif value == "immediate" or value == "taxi" then
+            elseif value == "immediate" or value == "taxi"
+                or value == "stopped" or value == "off" then
                 POPUP_MODE = value
             end
         elseif key == "display_seconds" then
@@ -2229,7 +2554,7 @@ end
 
 function log_tools.dominant_factor_text(report)
     if report.legacy then
-        return "旧版记录保留当时的评分结论，不使用 1.0 阈值重新评级。"
+        return "旧版记录保留当时的评分结论，不使用 1.1 阈值重新评级。"
     end
     local fpm_level = log_tools.fpm_severity(report.fpm)
     local g_level = log_tools.g_severity(report.g)
@@ -2429,6 +2754,13 @@ local function position_log_label(position_id)
     return labels[position_id] or "左侧居中"
 end
 
+function log_tools.popup_mode_log_text()
+    if POPUP_MODE == "immediate" then return "分析完成后立即显示" end
+    if POPUP_MODE == "taxi" then return "地速低于 30 kt 时显示" end
+    if POPUP_MODE == "stopped" then return "飞机停稳并持续 10 秒后显示" end
+    return "不自动显示"
+end
+
 local function next_log_file_path()
     local airport_token = sanitize_filename_token(landing_context.airport_id)
     local aircraft_token = sanitize_filename_token(landing_context.aircraft_icao)
@@ -2470,7 +2802,7 @@ end
 local function log_landing_summary()
     if logMsg then
         logMsg(string.format(
-            "[StarLux LMM] Aircraft=%s | Airport=%s | RWY~%s | Surface=%s | FlareCurve=%.1f trend=%s samples=%d | Bounce=%s second=%dfpm/%.2fG | FPM vviMedian=%d physicalP25=%d selected=%d | G touch=%.2f peak=%.2f curve=%.2f equiv=%.2f used=%.2f | impulseErr=%.0f%% confidence=%s method=%s | IAS=%.0f GS=%.0f AoA=%.1f Roll=%.1f | Wind=%03d/%dkt | Mode=%s | Layout=%s",
+            "[StarLux LMM] Aircraft=%s | Airport=%s | RWY~%s | Surface=%s | FlareCurve=%.1f trend=%s samples=%d | Bounce=%s second=%dfpm/%.2fG | FPM vviMedian=%d physicalP25=%d aglSlope=%d maxPairDiff=%d selected=%d fpmConfidence=%s source=%s | G touch=%.2f peak=%.2f curve=%.2f local=%.2f robust=%.2f equiv=%.2f used=%.2f | impulseErr=%.0f%% confidence=%s method=%s | IAS=%.0f GS=%.0f AoA=%.1f Roll=%.1f | Wind=%03d/%dkt | Mode=%s | Layout=%s",
             landing_context.aircraft_icao,
             landing_context.airport_id,
             landing_context.runway,
@@ -2483,10 +2815,16 @@ local function log_landing_summary()
             bounce_state.second_curve_g,
             round_num(landing_analysis.vvi_fpm),
             round_num(landing_analysis.physical_fpm),
+            round_num(landing_analysis.agl_fpm),
+            round_num(landing_analysis.fpm_max_pair_difference),
             debug_data.selected_fpm,
+            landing_analysis.fpm_confidence,
+            landing_analysis.flare_fpm_source,
             landing_touch_g,
             landing_peak_g,
             debug_data.robust_g,
+            landing_analysis.local_event_g,
+            landing_analysis.robust_event_g,
             debug_data.expected_max_g,
             landing_g,
             landing_analysis.consistency_error * 100,
@@ -2504,13 +2842,14 @@ local function log_landing_summary()
     end
 end
 
-local function collect_audit_values(source, count, start_time, end_time, value_kind, airborne_only)
+local function collect_audit_values(source, count, start_time, end_time, value_kind, airborne_only, max_agl_m)
     local old_count = sort_scratch_count
     local selected_count = 0
     for i = 1, count do
         local sample = source[i]
         if sample.t >= start_time and sample.t <= end_time
-            and (not airborne_only or sample.on_ground == 0) then
+            and (not airborne_only or sample.on_ground == 0)
+            and (max_agl_m == nil or (sample.agl_m >= 0 and sample.agl_m <= max_agl_m)) then
             local value = nil
             if value_kind == "local_vy" then
                 value = sample.local_vy_mps
@@ -2647,6 +2986,9 @@ local function write_primary_math_audit(file)
     local physical_start = touch_time - PHYSICAL_FPM_WINDOW_SECONDS
     local short_start = touch_time - PHYSICAL_FPM_SHORT_WINDOW_SECONDS
     local diagnostic_start = touch_time - VVI_DIAGNOSTIC_WINDOW_SECONDS
+    local agl_start = touch_time - landing_analysis.fpm_validation.agl_window_seconds
+    local agl_end = touch_time - landing_analysis.fpm_validation.agl_end_guard_seconds
+    local terminal_max_agl_m = landing_analysis.fpm_validation.terminal_agl_ft / 3.28084
     local baseline_start = touch_time - G_BASELINE_WINDOW_SECONDS
     local post_start = math.max(touch_time, landing_analysis.end_time - 0.05)
     local impact_start = landing_analysis.impact_start_time
@@ -2668,30 +3010,41 @@ local function write_primary_math_audit(file)
     file:write("审计快照是否截断: " .. math_boolean_text(math_audit.limited) .. "\n\n")
 
     file:write("逐样本审计表\n")
-    file:write("编号  T相对(s)    地面  rawG       pitch       roll        projectedG  localVy(m/s)  physicalFPM   VVI(fpm)   窗口标记\n")
-    file:write("--------------------------------------------------------------------------------------------------------------------------------\n")
+    file:write("编号  T相对(s)    地面  AGL(m)      rawG       pitch       roll        projectedG  localVy(m/s)  physicalFPM   VVI(fpm)   窗口标记\n")
+    file:write("--------------------------------------------------------------------------------------------------------------------------------------------\n")
     for i = 1, math_audit.count do
         local sample = math_audit.samples[i]
         local airborne = sample.on_ground == 0
-        local in_physical = airborne and sample.t >= physical_start and sample.t <= touch_time
+        local in_physical = airborne
+            and sample.t >= physical_start
+            and sample.t <= agl_end
+            and sample.agl_m >= 0
+            and sample.agl_m <= terminal_max_agl_m
         local in_short = airborne and sample.t >= short_start and sample.t <= touch_time
         local in_diagnostic = airborne and sample.t >= diagnostic_start and sample.t <= touch_time
+        local in_agl = airborne
+            and sample.t >= agl_start
+            and sample.t <= agl_end
+            and sample.agl_m >= 0
+            and sample.agl_m <= terminal_max_agl_m
         local in_baseline = airborne and sample.t >= baseline_start and sample.t <= impact_start
         local in_impact = sample.t >= impact_start and sample.t <= impact_end
         local in_post = sample.t >= post_start and sample.t <= landing_analysis.end_time
         local flags = table.concat({
-            audit_flag(in_physical, "F250"),
+            audit_flag(in_physical, "F5"),
             audit_flag(in_short, "F80"),
             audit_flag(in_diagnostic, "V850"),
+            audit_flag(in_agl, "AGL"),
             audit_flag(in_baseline, "BASE"),
             audit_flag(in_impact, "IMPACT"),
             audit_flag(in_post, "POST")
         }, ",")
         file:write(string.format(
-            "%4d  %+11.9f  %4d  %.9f  %+10.6f  %+10.6f  %.9f  %+12.9f  %+11.6f  %+10.6f  %s\n",
+            "%4d  %+11.9f  %4d  %10.6f  %.9f  %+10.6f  %+10.6f  %.9f  %+12.9f  %+11.6f  %+10.6f  %s\n",
             i,
             sample.t - touch_time,
             sample.on_ground,
+            sample.agl_m,
             sample.g_normal,
             sample.pitch_deg,
             sample.roll_deg,
@@ -2702,20 +3055,21 @@ local function write_primary_math_audit(file)
             flags
         ))
     end
-    file:write("\n窗口标记: F250=250ms物理FPM/VVI，F80=80ms短窗，V850=850ms最差VVI，BASE=接地前G基线，IMPACT=第一次压缩，POST=压缩末端速度。\n\n")
+    file:write("\n窗口标记: F5=5ft以下250ms物理FPM/VVI，F80=80ms短窗，V850=850ms最差VVI，AGL=5ft以下几何高度斜率窗口，BASE=接地前G基线，IMPACT=第一次压缩，POST=压缩末端速度。\n\n")
 
     local physical_count = collect_audit_values(
         math_audit.samples,
         math_audit.count,
         physical_start,
-        touch_time,
+        agl_end,
         "local_vy",
-        true
+        true,
+        terminal_max_agl_m
     )
     local physical_index = physical_count > 0
         and math.max(1, math.ceil(physical_count * PHYSICAL_FPM_PERCENTILE)) or 0
     local physical_value = physical_index > 0 and sort_scratch[physical_index] or 0
-    write_sorted_scratch(file, "250ms物理垂直速度(m/s)", 9)
+    write_sorted_scratch(file, "5ft以下250ms物理垂直速度(m/s)", 9)
     file:write(string.format(
         "P25索引 = ceil(%d × %.2f) = %d；选中 %.9f m/s × 196.850394 = %.9f fpm；显示四舍五入 = %d fpm\n\n",
         physical_count,
@@ -2723,7 +3077,7 @@ local function write_primary_math_audit(file)
         physical_index,
         physical_value,
         physical_value * 196.850394,
-        landing_fpm
+        round_num(physical_value * 196.850394)
     ))
 
     local short_count = collect_audit_values(
@@ -2746,13 +3100,53 @@ local function write_primary_math_audit(file)
         math_audit.samples,
         math_audit.count,
         physical_start,
-        touch_time,
+        agl_end,
         "vvi",
-        true
+        true,
+        terminal_max_agl_m
     )
     local vvi_value = scratch_median() or 0
-    write_sorted_scratch(file, "250ms VVI(fpm)", 6)
+    write_sorted_scratch(file, "5ft以下250ms VVI(fpm)", 6)
     file:write(string.format("VVI中位数(n=%d) = %.9f fpm\n\n", vvi_count, vvi_value))
+
+    file:write("5ft以下三链交叉验证复算\n")
+    file:write(string.format(
+        "窗口: T-%.3f s 至 T-%.3f s；仅使用离地且 AGL≤%.1f ft 的样本；最少 %d 个样本且跨度不少于 %.3f s。\n",
+        landing_analysis.fpm_validation.agl_window_seconds,
+        landing_analysis.fpm_validation.agl_end_guard_seconds,
+        landing_analysis.fpm_validation.terminal_agl_ft,
+        landing_analysis.fpm_validation.agl_min_samples,
+        landing_analysis.fpm_validation.agl_min_span_seconds
+    ))
+    file:write(string.format(
+        "对窗口内每一对样本计算 slope=(AGL_j-AGL_i)/(t_j-t_i)，仅保留 dt>=%.3f s；AGL_FPM=median(slope)×196.850394。\n",
+        landing_analysis.fpm_validation.agl_min_pair_gap_seconds
+    ))
+    file:write(string.format(
+        "物理样本=%d；VVI样本=%d；几何样本=%d；斜率对=%d；跨度=%.9f s；物理=%.9f；VVI=%.9f；几何=%.9f fpm。\n",
+        landing_analysis.physical_sample_count,
+        landing_analysis.vvi_sample_count,
+        landing_analysis.agl_sample_count,
+        landing_analysis.agl_pair_count,
+        landing_analysis.agl_sample_span_seconds,
+        landing_analysis.physical_fpm,
+        landing_analysis.vvi_fpm,
+        landing_analysis.agl_fpm
+    ))
+    file:write(string.format(
+        "两两差值: |物理-VVI|=%.9f，|物理-几何|=%.9f，|VVI-几何|=%.9f；最大差值=%.9f fpm。\n",
+        abs_value(landing_analysis.fpm_difference),
+        abs_value(landing_analysis.agl_physical_difference),
+        abs_value(landing_analysis.agl_vvi_difference),
+        landing_analysis.fpm_max_pair_difference
+    ))
+    file:write(string.format(
+        "判定: 三组差值全部<=%d 为高可信并采用物理FPM；任一组超过阈值立即回退VVI。最终来源=%s；可信度=%s；最终FPM=%d。\n\n",
+        landing_analysis.fpm_validation.max_pair_difference_fpm,
+        landing_analysis.flare_fpm_source,
+        landing_analysis.fpm_confidence,
+        landing_fpm
+    ))
 
     local diagnostic_count = collect_audit_values(
         math_audit.samples,
@@ -2842,6 +3236,50 @@ local function write_primary_math_audit(file)
         "算法峰值 = max(触地帧原始G, 投影G样本峰值) = %.9f G；算法保存曲线G = %.9f G\n\n",
         landing_peak_g,
         landing_analysis.curve_g
+    ))
+
+    file:write("160ms局部冲击包络复算\n")
+    file:write(string.format(
+        "规则: 滑窗长度=%.3f s，最少样本=%d，最小实际跨度=%.3f s；每窗取P%.0f，最终取各窗P75最大值。\n",
+        landing_analysis.g_local_event.window_seconds,
+        landing_analysis.g_local_event.min_samples,
+        landing_analysis.g_local_event.min_span_seconds,
+        landing_analysis.g_local_event.percentile * 100
+    ))
+    if landing_analysis.local_event_g_valid then
+        local local_event_count = collect_audit_values(
+            math_audit.samples,
+            math_audit.count,
+            landing_analysis.local_event_window_start_time,
+            landing_analysis.local_event_window_end_time,
+            "projected_g",
+            false
+        )
+        local local_event_index = local_event_count > 0
+            and math.max(
+                1,
+                math.ceil(local_event_count * landing_analysis.g_local_event.percentile)
+            ) or 0
+        local local_event_value = local_event_index > 0 and sort_scratch[local_event_index] or 0
+        write_sorted_scratch(file, "选中局部窗口垂直投影G", 9)
+        file:write(string.format(
+            "选中窗口: T%+.9f 至 T%+.9f s；样本=%d；跨度=%.9f s；P75索引=%d；复算=%.9f G；算法保存=%.9f G。\n",
+            landing_analysis.local_event_window_start_time - touch_time,
+            landing_analysis.local_event_window_end_time - touch_time,
+            local_event_count,
+            landing_analysis.local_event_window_span_seconds,
+            local_event_index,
+            local_event_value,
+            landing_analysis.local_event_g
+        ))
+    else
+        file:write("没有满足最少样本与跨度要求的局部窗口，回退全局P75。\n")
+    end
+    file:write(string.format(
+        "稳健冲击G=max(全局P75 %.9f, 局部包络 %.9f)=%.9f G。\n\n",
+        landing_analysis.curve_g,
+        landing_analysis.local_event_g,
+        landing_analysis.robust_event_g
     ))
 
     local high_threshold = landing_analysis.baseline_g
@@ -2983,7 +3421,7 @@ local function write_primary_math_audit(file)
         fallback_g_cap(landing_fpm)
     ))
     file:write(string.format(
-        "样本无效: finalG=min(curveG,备用上限)；高可信: finalG=curveG；中可信: finalG=0.65×curveG+0.35×equivalentG；低可信: finalG=0.25×curveG+0.75×equivalentG。\n"
+        "样本无效: finalG=min(curveG,备用上限)；高可信: finalG=curveG；中可信或长压缩超时: finalG=max(curveG,localEventG)；低可信: finalG=0.25×curveG+0.75×equivalentG。\n"
     ))
     file:write(string.format(
         "所有分支最终执行 clamp(1,5,finalG)；最终G高精度值 = %.9f G；界面显示 = %.2f G\n\n",
@@ -3028,7 +3466,7 @@ local function write_landing_log()
     end
 
     file:write("\239\187\191")
-    file:write("StarLux 落地率插件 v1.0 - 单次落地记录\n")
+    file:write("StarLux 落地率插件 v1.1 - 单次落地记录\n")
     file:write("======================================================================\n\n")
 
     file:write("一、核心落地结果\n")
@@ -3037,6 +3475,8 @@ local function write_landing_log()
     file:write("最终评价: " .. status_short(landing_status) .. "\n")
     file:write("评价说明: " .. status_explanation(landing_status) .. "\n")
     file:write("触地垂直速度: " .. vertical_speed_log_text(landing_fpm) .. "\n")
+    file:write("下降率取值: " .. (landing_analysis.flare_fpm_source == "PHYSICAL" and "物理轨迹（三项终端测量一致）" or "垂直速度 VVI（三项终端测量存在差异，已自动采用）") .. "\n")
+    file:write("FPM数据可信度: " .. confidence_text(landing_analysis.fpm_confidence) .. "\n")
     file:write(string.format("最终过载: %.2f G\n", landing_g))
     if flare_analysis.valid then
         file:write(string.format(
@@ -3106,6 +3546,7 @@ local function write_landing_log()
     file:write("0.5秒聚合点数: " .. tostring(flare_trace.bucket_count) .. "\n")
     file:write("是否达到容量上限: " .. (flare_trace.limited and "是" or "否") .. "\n")
     file:write(string.format("100 ft 至触地时间: %.2f s\n", flare_analysis.duration_seconds))
+    file:write("轨迹下降率取值: " .. (landing_analysis.flare_fpm_source == "PHYSICAL" and "物理轨迹（三项终端测量一致）" or "垂直速度 VVI（三项终端测量存在差异，已自动采用）") .. "\n")
     file:write(string.format("100 ft 附近下降率: %.0f fpm\n", flare_analysis.entry_fpm))
     file:write(string.format("触地下降率: %d fpm\n", landing_fpm))
     file:write(string.format("下降率净改善量: %+.0f fpm\n", flare_analysis.recovery_fpm))
@@ -3127,26 +3568,27 @@ local function write_landing_log()
         FLARE_CONFIG.oscillation_efficiency_max,
         FLARE_CONFIG.oscillation_worsening_ratio_min
     ))
-    file:write("评分说明: v1.0 的拉平曲率仅用于复盘展示，暂不参与评分。\n")
+    file:write("评分说明: v1.1 的拉平曲率仅用于复盘展示，暂不参与评分。\n")
     file:write(string.format("曲率分析耗时: %.3f ms\n\n", flare_analysis.calculation_ms))
 
     if landing_analysis.math_log_enabled then
         file:write("0.5秒聚合轨迹表（高精度复算输入）\n")
-        file:write("T+秒         RA(ft)       物理FPM       VVI          IAS        GS         Pitch       AoA         Roll\n")
-        file:write("----------------------------------------------------------------------------------------------------------\n")
+        file:write("T+秒         RA(ft)       轨迹FPM       VVI          IAS        GS         Pitch       AoA         Roll        物理FPM\n")
+        file:write("------------------------------------------------------------------------------------------------------------------------\n")
         for i = 1, flare_trace.bucket_count do
             local bucket = flare_trace.buckets[i]
             file:write(string.format(
-                "%11.9f  %11.6f  %+13.9f  %+11.6f  %10.6f  %10.6f  %+11.6f  %+10.6f  %+10.6f\n",
+                "%11.9f  %11.6f  %+13.9f  %+11.6f  %10.6f  %10.6f  %+11.6f  %+10.6f  %+10.6f  %+13.9f\n",
                 bucket.t - flare_trace.start_time,
                 bucket.agl_ft,
-                bucket.physical_fpm,
+                bucket.selected_fpm,
                 bucket.vvi_fpm,
                 bucket.ias_kts,
                 bucket.gs_kts,
                 bucket.pitch_deg,
                 bucket.aoa_deg,
-                bucket.roll_deg
+                bucket.roll_deg,
+                bucket.physical_fpm
             ))
         end
         file:write("\n拉平曲率逐段复算\n")
@@ -3164,8 +3606,8 @@ local function write_landing_log()
             local dt1 = p2.t - p1.t
             local dt2 = p3.t - p2.t
             if dt1 > 0.10 and dt2 > 0.10 then
-                local slope1 = (p2.physical_fpm - p1.physical_fpm) / dt1
-                local slope2 = (p3.physical_fpm - p2.physical_fpm) / dt2
+                local slope1 = (p2.selected_fpm - p1.selected_fpm) / dt1
+                local slope2 = (p3.selected_fpm - p2.selected_fpm) / dt2
                 local curvature = (slope2 - slope1) / ((dt1 + dt2) * 0.5)
                 curve_replay_count = curve_replay_count + 1
                 curve_replay_sum = curve_replay_sum + curvature
@@ -3207,21 +3649,22 @@ local function write_landing_log()
         end
     else
         file:write("0.5秒聚合轨迹表\n")
-        file:write("T+秒   RA(ft)   物理FPM   VVI   IAS   GS   Pitch   AoA   Roll\n")
-        file:write("----------------------------------------------------------------------\n")
+        file:write("T+秒   RA(ft)   轨迹FPM   VVI   IAS   GS   Pitch   AoA   Roll   物理FPM\n")
+        file:write("--------------------------------------------------------------------------------\n")
         for i = 1, flare_trace.bucket_count do
             local bucket = flare_trace.buckets[i]
             file:write(string.format(
-                "%5.1f  %7.1f  %8.0f  %5.0f  %4.0f  %4.0f  %+6.1f  %+5.1f  %+5.1f\n",
+                "%5.1f  %7.1f  %8.0f  %5.0f  %4.0f  %4.0f  %+6.1f  %+5.1f  %+5.1f  %+8.0f\n",
                 bucket.t - flare_trace.start_time,
                 bucket.agl_ft,
-                bucket.physical_fpm,
+                bucket.selected_fpm,
                 bucket.vvi_fpm,
                 bucket.ias_kts,
                 bucket.gs_kts,
                 bucket.pitch_deg,
                 bucket.aoa_deg,
-                bucket.roll_deg
+                bucket.roll_deg,
+                bucket.physical_fpm
             ))
         end
         file:write("\n")
@@ -3254,17 +3697,64 @@ local function write_landing_log()
 
     file:write("四、FPM与G算法诊断\n")
     file:write("----------------------------------------------------------------------\n")
+    file:write("最终显示/评分 FPM: " .. vertical_speed_log_text(landing_fpm) .. "\n")
+    file:write("FPM数据可信度: " .. confidence_text(landing_analysis.fpm_confidence) .. "\n")
+    file:write("下降率取值说明: " .. landing_analysis.fpm_method .. "\n")
+    file:write(string.format(
+        "三链终端窗口: 触地前 %.0f ms、AGL不高于 %.1f ft\n",
+        landing_analysis.fpm_validation.agl_window_seconds * 1000,
+        landing_analysis.fpm_validation.terminal_agl_ft
+    ))
     file:write("同窗 VVI 中位数: " .. vertical_speed_log_text(round_num(landing_analysis.vvi_fpm)) .. "\n")
-    file:write("250 ms 物理速度第25百分位: " .. vertical_speed_log_text(round_num(landing_analysis.physical_fpm)) .. "\n")
+    if landing_analysis.physical_fpm_valid then
+        file:write("250 ms 物理速度第25百分位: " .. vertical_speed_log_text(round_num(landing_analysis.physical_fpm)) .. "\n")
+    else
+        file:write("250 ms 物理速度第25百分位: 样本不足\n")
+    end
     file:write("80 ms 物理速度中位数: " .. vertical_speed_log_text(round_num(landing_analysis.physical_short_fpm)) .. "\n")
     file:write("0.85 s 最差 VVI: " .. vertical_speed_log_text(round_num(landing_analysis.vvi_min_fpm)) .. "\n")
+    if landing_analysis.agl_fpm_valid then
+        file:write("第三链 AGL 高度变化下降率: " .. vertical_speed_log_text(round_num(landing_analysis.agl_fpm)) .. "\n")
+    else
+        file:write("第三链 AGL 高度变化下降率: 样本不足，无法确认\n")
+    end
     file:write(string.format("物理主值与同窗 VVI 差值: %+d fpm\n", round_num(landing_analysis.fpm_difference)))
-    file:write("FPM 物理窗口样本数: " .. tostring(landing_analysis.physical_sample_count) .. "\n")
+    file:write(string.format("物理FPM与AGL链差值: %+d fpm\n", round_num(landing_analysis.agl_physical_difference)))
+    file:write(string.format("VVI与AGL链差值: %+d fpm\n", round_num(landing_analysis.agl_vvi_difference)))
+    file:write(string.format("三链最大两两差值: %d fpm\n", round_num(landing_analysis.fpm_max_pair_difference)))
+    file:write(string.format(
+        "FPM物理/VVI窗口样本数: %d / %d\n",
+        landing_analysis.physical_sample_count,
+        landing_analysis.vvi_sample_count
+    ))
+    file:write(string.format(
+        "AGL验证样本/斜率对/跨度: %d / %d / %.3f s\n",
+        landing_analysis.agl_sample_count,
+        landing_analysis.agl_pair_count,
+        landing_analysis.agl_sample_span_seconds
+    ))
+    file:write(string.format(
+        "三链阈值: 5 ft以下三组两两差值均 ≤ %d fpm 才为高可信；任一组超过阈值立即降低可信度并由 VVI 接管。\n",
+        landing_analysis.fpm_validation.max_pair_difference_fpm
+    ))
     file:write(string.format("触地帧过载: %.2f G\n", landing_touch_g))
     file:write(string.format("第一次压缩原始峰值: %.2f G\n", landing_peak_g))
     file:write(string.format("第75百分位曲线 G: %.2f G\n", landing_analysis.curve_g))
+    if landing_analysis.local_event_g_valid then
+        file:write(string.format("160 ms 局部冲击包络 G: %.2f G\n", landing_analysis.local_event_g))
+        file:write(string.format(
+            "局部包络窗口样本/跨度/P75索引: %d / %.0f ms / %d\n",
+            landing_analysis.local_event_sample_count,
+            landing_analysis.local_event_window_span_seconds * 1000,
+            landing_analysis.local_event_percentile_index
+        ))
+    else
+        file:write("160 ms 局部冲击包络 G: 样本不足，使用全局P75\n")
+    end
+    file:write(string.format("中可信度稳健冲击 G: %.2f G\n", landing_analysis.robust_event_g))
     file:write(string.format("接地前垂直 G 基线: %.2f G\n", landing_analysis.baseline_g))
     file:write(string.format("冲量等效 G: %.2f G\n", landing_analysis.equivalent_g))
+    file:write("第一次压缩结束原因: " .. landing_analysis.capture_end_reason .. "\n")
     file:write(string.format("第一次压缩持续时间: %.0f ms\n", landing_analysis.stop_duration_seconds * 1000))
     file:write(string.format("高 G 持续时间: %.0f ms\n", landing_analysis.high_g_duration_seconds * 1000))
     file:write(string.format("G 冲量推算速度变化: %.3f m/s\n", landing_analysis.impulse_delta_mps))
@@ -3286,7 +3776,7 @@ local function write_landing_log()
     file:write(string.format("Attention: FPM ≤ %d，G ≤ %.2f\n", FPM_ATTENTION_MAX, G_ATTENTION_MAX))
     file:write("UNSTABLE: FPM 或 G 超过任意 Attention 上限。\n")
     file:write("FPM 与 G 分别分档，最终评价取较严重等级；拉平曲率暂不参与评分。\n")
-    file:write("弹窗时机: " .. (POPUP_MODE == "immediate" and "分析完成后立即显示" or "地速低于 30 kt 时") .. "\n")
+    file:write("弹窗时机: " .. log_tools.popup_mode_log_text() .. "\n")
     file:write("显示时长: " .. tostring(DISPLAY_SECONDS) .. " 秒\n")
     file:write("屏幕位置: " .. position_log_label(POPUP_POSITION) .. "\n")
     file:write("窗口布局: " .. (POPUP_LAYOUT == "vertical" and "竖向" or "横向") .. "\n")
@@ -3572,15 +4062,18 @@ local function process_landing_analysis(now, local_vy_mps)
         end
 
         if local_vy_mps > 0.05 then
+            landing_analysis.capture_end_reason = "检测到垂直速度反向"
             landing_analysis.impact_end_time = now
             landing_analysis.end_time = now
             landing_analysis.phase = "analyze_velocity"
         elseif landing_analysis.stop_stable_frames >= IMPACT_STOP_STABLE_FRAMES then
             -- 三帧只用于确认停止状态；物理减速时长截止到第一帧达到停止阈值的时刻。
+            landing_analysis.capture_end_reason = "垂直速度连续三帧进入稳定区"
             landing_analysis.impact_end_time = landing_analysis.stop_candidate_time
             landing_analysis.end_time = now
             landing_analysis.phase = "analyze_velocity"
         elseif now >= landing_analysis.capture_deadline then
+            landing_analysis.capture_end_reason = "达到1.20秒安全采集上限"
             landing_analysis.impact_end_time = now
             landing_analysis.end_time = now
             landing_analysis.phase = "analyze_velocity"
@@ -3631,14 +4124,14 @@ function ma_open_settings_window()
         return
     end
 
-    settings_window = float_wnd_create(520, 600, 1, true)
+    settings_window = float_wnd_create(520, 650, 1, true)
     float_wnd_set_title(settings_window, "StarLux Landing Meter - Settings")
     float_wnd_set_imgui_builder(settings_window, "ma_build_settings_window")
     float_wnd_set_onclose(settings_window, "ma_settings_window_closed")
 
     local screen_w = SCREEN_WIDTH or 1920
     local screen_h = SCREEN_HIGHT or 1080
-    float_wnd_set_position(settings_window, math.floor((screen_w - 520) / 2), math.floor((screen_h - 600) / 2))
+    float_wnd_set_position(settings_window, math.floor((screen_w - 520) / 2), math.floor((screen_h - 650) / 2))
 end
 
 function ma_build_settings_window(wnd, x, y)
@@ -3649,6 +4142,17 @@ function ma_build_settings_window(wnd, x, y)
     end
     if imgui.RadioButton("Show after slowing below 30 kt", POPUP_MODE == "taxi") then
         POPUP_MODE = "taxi"
+        save_settings()
+    end
+    if imgui.RadioButton("Show after stopped for 10 seconds", POPUP_MODE == "stopped") then
+        POPUP_MODE = "stopped"
+        runtime_state.stopped_popup_since = 0
+        save_settings()
+    end
+    if imgui.RadioButton("Do not show automatically", POPUP_MODE == "off") then
+        POPUP_MODE = "off"
+        show_until = 0
+        runtime_state.stopped_popup_since = 0
         save_settings()
     end
 
@@ -3878,15 +4382,15 @@ function ma_build_log_manager_window(wnd, x, y)
     imgui.TextUnformatted("Visualizer runs locally. No landing data is uploaded.")
 end
 
-add_macro("StarLux Landing Meter | Open Settings", "ma_open_settings_window()")
+add_macro("StarLux 落地率插件 | 打开设置", "ma_open_settings_window()")
 create_command(
     "starlux/lmm/open_settings",
-    "Open StarLux Landing Meter settings",
+    "打开 StarLux 落地率插件设置",
     "ma_open_settings_window()",
     "",
     ""
 )
-add_macro("StarLux Landing Meter | Landing Records", "ma_open_log_manager()")
+add_macro("StarLux 落地率插件 | 落地记录", "ma_open_log_manager()")
 
 -- =========================
 -- 核心逻辑
@@ -3913,6 +4417,42 @@ function ma_landing_meter_update()
 
     local radio_alt_ft = meters_to_feet(y_agl_m)
     local gs_kt = mps_to_kt(groundspeed_mps)
+    local is_replay = lmm_get_int("is_in_replay") ~= 0
+
+    -- 回放中的接地状态跳变不属于新的真实飞行，禁止采样、触发和写入报告。
+    -- 退出回放时再清空一次瞬时状态，避免把回放末帧与实时首帧拼成一次假落地。
+    if is_replay then
+        if runtime_state.replay_active == false then
+            runtime_state.replay_active = true
+            armed = false
+            landing_complete = false
+            landing_analysis.phase = "idle"
+            reset_sample_buffer()
+            reset_math_audit()
+            reset_flare_trace()
+            reset_bounce_state()
+            runtime_state.stopped_popup_since = 0
+            runtime_state.deferred_popup_done = false
+            show_until = 0
+            if logMsg then logMsg("[StarLux LMM] Replay detected; landing capture suspended.") end
+        end
+        was_on_ground = on_ground
+        return
+    elseif runtime_state.replay_active then
+        runtime_state.replay_active = false
+        armed = false
+        landing_complete = false
+        landing_analysis.phase = "idle"
+        reset_sample_buffer()
+        reset_math_audit()
+        reset_flare_trace()
+        reset_bounce_state()
+        runtime_state.stopped_popup_since = 0
+        runtime_state.deferred_popup_done = false
+        was_on_ground = on_ground
+        if logMsg then logMsg("[StarLux LMM] Replay ended; waiting for a fresh approach.") end
+        return
+    end
 
     -- 只有飞机达到一定离地高度和速度后才进入待触发状态。
     -- 这样可以避免载入已经停在地面的飞机时误弹出数据窗。
@@ -3930,7 +4470,8 @@ function ma_landing_meter_update()
         end
         armed = true
         landing_complete = false
-        taxi_popup_done = false
+        runtime_state.deferred_popup_done = false
+        runtime_state.stopped_popup_since = 0
     end
 
     -- 只在进近阶段低频监测实际降水和跑道摩擦状态；触地后不再读取气象。
@@ -3980,6 +4521,7 @@ function ma_landing_meter_update()
             current_g,
             pitch_deg,
             roll_deg,
+            y_agl_m,
             on_ground
         )
     end
@@ -4027,12 +4569,26 @@ function ma_landing_meter_update()
     process_landing_analysis(now, local_vy_mps)
     process_bounce_monitor(now, on_ground, radio_alt_ft, local_vy_mps, current_g)
 
-    -- 低速弹窗模式：落地后地速低于 30 节时显示。
-    if POPUP_MODE == "taxi" and landing_complete == true and taxi_popup_done == false then
+    -- 延迟弹窗模式只在分析完成后计时；停稳模式要求地速连续 10 秒不超过 1 节。
+    if POPUP_MODE == "taxi" and landing_complete == true and runtime_state.deferred_popup_done == false then
         if gs_kt <= TAXI_POPUP_SPEED_KT then
             show_until = now + DISPLAY_SECONDS
-            taxi_popup_done = true
+            runtime_state.deferred_popup_done = true
         end
+    elseif POPUP_MODE == "stopped" and landing_complete == true and runtime_state.deferred_popup_done == false then
+        if on_ground == 1 and gs_kt <= runtime_state.stopped_speed_kt then
+            if runtime_state.stopped_popup_since <= 0 then
+                runtime_state.stopped_popup_since = now
+            elseif now - runtime_state.stopped_popup_since >= runtime_state.stopped_hold_seconds then
+                show_until = now + DISPLAY_SECONDS
+                runtime_state.deferred_popup_done = true
+                runtime_state.stopped_popup_since = 0
+            end
+        else
+            runtime_state.stopped_popup_since = 0
+        end
+    elseif POPUP_MODE ~= "stopped" then
+        runtime_state.stopped_popup_since = 0
     end
 
     -- 分阶段处理机场查询、报告写入和完成提示。
@@ -4135,7 +4691,7 @@ function ma_landing_meter_draw()
 
         if DEBUG_MODE == true then
             glColor4f(1, 1, 1, 0.86)
-            local debug_line1 = string.format("DBG FPM vvi:%d phys:%d", round_num(landing_analysis.vvi_fpm), debug_data.physical_fpm)
+            local debug_line1 = string.format("DBG FPM %s %s", landing_analysis.flare_fpm_source, landing_analysis.fpm_confidence)
             local debug_line2 = string.format("DBG G pk:%.2f curve:%.2f eq:%.2f", debug_data.peak_g, debug_data.robust_g, debug_data.expected_max_g)
             local debug_line3 = string.format("DBG err:%.0f%% %s %.2fms", debug_data.consistency_error * 100, debug_data.confidence, debug_data.analysis_ms)
             local debug_x = x + panel_w + 12
@@ -4169,7 +4725,7 @@ do_every_draw("ma_landing_meter_draw()")
 
 if logMsg then
     logMsg(string.format(
-        "[StarLux LMM] v1.0 loaded successfully with %d direct XPLM DataRefs.",
+        "[StarLux LMM] v1.1 loaded successfully with %d direct XPLM DataRefs.",
         #LMM_DATAREF_SPECS
     ))
 end

@@ -18,3 +18,12 @@ LMM_Log/.lmm_index.tmp
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Local release review and work-in-progress documents
+RELEASE_CHECKLIST_v1.1.md
+docs/StarLux_LMM_v1.0_核心算法技术说明手册.pdf
+docs/video-assets/
+旧版备份/2026-07-29_*/
+旧版备份/Lua/StarLux_LMM_v1.0.lua
+旧版备份/Lua/StarLux_LMM_v1.1.lua
+旧版备份/阅读器/LMM_Report_Reader.html

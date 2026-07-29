@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>StarLux LMM 报告阅读器 v1.0</title>
+<title>StarLux LMM 报告阅读器 v1.1</title>
 <style>
 :root{
   --bg:#07121b;--panel:#102332;--panel2:#142b3c;--line:#284457;
@@ -104,9 +104,8 @@ h1{font-size:30px;line-height:1.2;margin:0 0 9px}
 .compare-metric .metric-label{display:block;color:var(--muted);font-size:9px;margin-bottom:6px}
 .compare-values{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:11px}.compare-values b{font-size:13px}.compare-values span{color:#afc0c9}
 .compare-delta{font-size:9px;color:#d0dce1;margin-top:5px}
-.chart-legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 8px;font-size:10px;color:#b7c8d0}
-.legend-item{display:flex;align-items:center;gap:7px;min-width:0}.legend-item span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}
-.legend-line{display:inline-block;width:30px;border-top:3px solid var(--status)}.legend-line.compare{border-top:2px dashed var(--compare);opacity:.75}
+.chart-tools{display:grid;gap:10px;margin:0 0 11px}.metric-picker{display:flex;gap:7px;flex-wrap:wrap}.metric-chip{--metric:#4ea1ff;display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid #34576b;border-radius:999px;background:#0a2230;color:#aebfc8;font-size:10px;cursor:pointer;user-select:none;transition:.15s ease}.metric-chip:hover{border-color:#638ca2;color:#eaf6fb}.metric-chip.selected{border-color:var(--metric);background:color-mix(in srgb,var(--metric) 16%,#0a2230);color:#fff;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--metric) 24%,transparent)}.metric-chip input{position:absolute;opacity:0;pointer-events:none}.metric-chip:has(input:focus-visible){outline:2px solid #d7f3ff;outline-offset:2px}.metric-dot{width:8px;height:8px;border-radius:50%;background:var(--metric);box-shadow:0 0 8px color-mix(in srgb,var(--metric) 55%,transparent)}
+.chart-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10px;color:#b7c8d0}.legend-item{display:flex;align-items:center;gap:7px;min-width:0;padding:5px 8px;border:1px solid rgba(92,126,145,.28);border-radius:7px;background:rgba(255,255,255,.025)}.legend-line{display:inline-block;width:24px;border-top:3px solid var(--series-color)}.legend-item small{color:#849ba7}.chart-style-key{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:#91a7b3;font-size:9px}.style-key{display:inline-flex;align-items:center;gap:6px}.style-line{width:24px;border-top:3px solid #d9edf7}.style-line.compare{border-top-style:dashed;opacity:.35}.chart-scale-note{color:#7f98a5;font-size:9px;line-height:1.5}
 .layout{display:grid;grid-template-columns:1.45fr .75fr;gap:15px;margin-top:15px}
 .section{padding:19px}
 .section h2,.viz-title{font-size:17px;margin:0 0 5px}
@@ -154,7 +153,7 @@ h1{font-size:30px;line-height:1.2;margin:0 0 9px}
 .geometry-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);line-height:1.75;padding:18px}
 .chart-box{position:relative;height:350px;margin-top:10px}
 canvas{display:block;width:100%;height:100%}
-.tooltip{display:none;white-space:pre-line;position:absolute;pointer-events:none;background:#031019;border:1px solid #3d6b84;border-radius:9px;padding:9px 11px;font-size:10px;line-height:1.55;box-shadow:0 8px 25px rgba(0,0,0,.4);z-index:5}
+.tooltip{display:none;white-space:pre-line;position:absolute;pointer-events:none;background:#031019;border:1px solid #3d6b84;border-radius:9px;padding:9px 11px;font-size:10px;line-height:1.55;box-shadow:0 8px 25px rgba(0,0,0,.4);z-index:5;max-width:380px}
 .empty{height:225px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);border:1px dashed #355268;border-radius:12px;line-height:1.8}
 .diag{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}.diag td{padding:8px;border-bottom:1px solid rgba(125,159,178,.2)}.diag td:first-child{color:var(--muted)}
 details{margin-top:15px;border:1px solid var(--line);background:#0b1c28;border-radius:14px;padding:14px}
@@ -170,7 +169,7 @@ footer{color:#7f949f;font-size:10px;line-height:1.7;margin-top:21px;text-align:c
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand">STARLUX LANDING METRICS MONITOR · 报告阅读器 v1.0</div>
+    <div class="brand">STARLUX LANDING METRICS MONITOR · 报告阅读器 v1.1</div>
     <div class="privacy">完全本地读取 · 数据不会上传</div>
   </header>
   <div class="workspace">
@@ -191,7 +190,7 @@ footer{color:#7f949f;font-size:10px;line-height:1.7;margin-top:21px;text-align:c
           <h1>把落地日志拖到这里</h1>
           <p>无需启动 X-Plane。选择一份或多份 <b>LMM_*.txt</b>，网页会立即在本机解析评分、载荷、风向、姿态和 100 ft 后拉平轨迹。</p>
           <button class="btn primary" id="chooseFiles" type="button">选择落地日志</button>
-          <div class="formats">支持 StarLux LMM 早期日志及 0.7–1.0 记录 · 可多选</div>
+          <div class="formats">支持 StarLux LMM 早期日志及 0.7–1.1 记录 · 可多选</div>
         </div>
       </section>
       <section class="report" id="report" hidden>
@@ -227,7 +226,7 @@ footer{color:#7f949f;font-size:10px;line-height:1.7;margin-top:21px;text-align:c
         </section>
 
         <section class="grid">
-          <article class="card"><div class="label">触地下降率</div><div class="value" id="fpmCard">--</div><div class="hint">优先读取报告最终物理速度</div><div class="compare-line" id="fpmCompareLine" hidden></div></article>
+          <article class="card"><div class="label">触地下降率</div><div class="value" id="fpmCard">--</div><div class="hint" id="fpmSourceHint">按报告记录的下降率来源显示</div><div class="compare-line" id="fpmCompareLine" hidden></div></article>
           <article class="card"><div class="label">最终载荷</div><div class="value" id="gCard">--</div><div class="hint">沿用原报告最终显示值</div><div class="compare-line" id="gCompareLine" hidden></div></article>
           <article class="card"><div class="label">指示空速 / 地速</div><div class="value" id="speedCard">--</div><div class="hint">IAS / GS</div><div class="compare-line" id="speedCompareLine" hidden></div></article>
           <article class="card"><div class="label">拉平曲率</div><div class="value" id="flareCard">--</div><div class="hint" id="flareHint">该记录未提供拉平分析</div><div class="compare-line" id="flareCompareLine" hidden></div></article>
@@ -274,22 +273,27 @@ footer{color:#7f949f;font-size:10px;line-height:1.7;margin-top:21px;text-align:c
 
         <div class="layout">
           <section class="section">
-            <h2>100 ft 后拉平轨迹</h2><div class="lead">主要数据为清晰实线；对比数据以虚化虚线叠在后方，共用同一时间和 FPM 标尺。</div>
-            <div class="chart-legend" id="chartLegend" hidden>
-              <div class="legend-item"><i class="legend-line"></i><span id="primaryLegend">主要数据</span></div>
-              <div class="legend-item"><i class="legend-line compare"></i><span id="compareLegend">对比数据</span></div>
+            <h2>100 ft 后多参数轨迹</h2><div class="lead">T+ 秒固定为横轴，可同时选择多个聚合参数。相同单位共享量程，不同单位独立缩放；主要日志使用清晰实线，对比日志以同色虚化虚线叠在后方。</div>
+            <div class="chart-tools">
+              <div class="metric-picker" id="metricPicker" role="group" aria-label="选择图表数据源"></div>
+              <div class="chart-style-key">
+                <span class="style-key"><i class="style-line"></i>主要日志</span>
+                <span class="style-key"><i class="style-line compare"></i>对比日志（虚化）</span>
+                <span class="chart-scale-note">跨单位曲线按各自量程对齐，悬停可查看真实数值</span>
+              </div>
+              <div class="chart-legend" id="chartLegend" hidden></div>
             </div>
             <div class="chart-box" id="chartBox"><canvas id="flareChart"></canvas><div class="tooltip" id="chartTip"></div></div>
             <div class="empty" id="chartEmpty" hidden>该日志没有可绘制的 0.5 秒聚合轨迹。<br>早期版本仍可查看评分、触地数据和完整原文。</div>
           </section>
           <aside class="section">
-            <h2>载荷诊断</h2><div class="lead">详细数学日志会显示更多中间量。</div>
+            <h2>测量与载荷诊断</h2><div class="lead">v1.1 会显示下降率取值、三链对照与局部 G 包络；详细数学日志可提供更多中间量。</div>
             <table class="diag" id="diagnostics"></table>
           </aside>
         </div>
 
         <details id="rawDetails"><summary>展开完整原始 TXT</summary><pre id="rawText"></pre></details>
-        <footer>StarLux LMM 报告阅读器 v1.0 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。</footer>
+        <footer>StarLux LMM 报告阅读器 v1.1 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。</footer>
       </section>
     </main>
   </div>
@@ -301,13 +305,33 @@ footer{color:#7f949f;font-size:10px;line-height:1.7;margin-top:21px;text-align:c
 <script>
 "use strict";
 
-const state={records:[],activeId:null,compareId:null,importMode:"main"};
+const METRIC_PREFERENCE_KEY="starlux-lmm-trajectory-metrics";
+const TRAJECTORY_METRICS=[
+  {key:"fpm",label:"轨迹 FPM",unit:"fpm",group:"verticalSpeed",color:"#4EA1FF",decimals:0},
+  {key:"vvi",label:"VVI",unit:"fpm",group:"verticalSpeed",color:"#FFB84D",decimals:0},
+  {key:"physicalFpm",label:"物理 FPM",unit:"fpm",group:"verticalSpeed",color:"#D67CFF",decimals:0},
+  {key:"ra",label:"RA 高度",unit:"ft",group:"altitude",color:"#42D3C5",decimals:1},
+  {key:"ias",label:"IAS",unit:"kt",group:"speed",color:"#45D483",decimals:0},
+  {key:"gs",label:"GS",unit:"kt",group:"speed",color:"#A7D83D",decimals:0},
+  {key:"pitch",label:"Pitch",unit:"°",group:"attitude",color:"#FFD34E",decimals:1},
+  {key:"aoa",label:"AoA",unit:"°",group:"attitude",color:"#FF7D9C",decimals:1},
+  {key:"roll",label:"Roll",unit:"°",group:"attitude",color:"#F45B69",decimals:1}
+];
+const metricByKey=Object.fromEntries(TRAJECTORY_METRICS.map(metric=>[metric.key,metric]));
+let savedMetricKeys=["fpm"];
+try{
+  const saved=JSON.parse(localStorage.getItem(METRIC_PREFERENCE_KEY)||"null");
+  if(Array.isArray(saved))savedMetricKeys=saved
+}catch{}
+savedMetricKeys=[...new Set(savedMetricKeys.filter(key=>metricByKey[key]))];
+if(!savedMetricKeys.length)savedMetricKeys=["fpm"];
+const state={records:[],activeId:null,compareId:null,importMode:"main",selectedMetrics:savedMetricKeys};
 const $=id=>document.getElementById(id);
 const ui={
   fileInput:$("fileInput"),drop:$("dropZone"),report:$("report"),error:$("errorBox"),
   list:$("recordList"),count:$("recordCount"),context:$("contextDetails"),
   contextToggle:$("contextToggle"),canvas:$("flareChart"),tip:$("chartTip"),
-  comparePanel:$("comparePanel"),chartLegend:$("chartLegend")
+  comparePanel:$("comparePanel"),chartLegend:$("chartLegend"),metricPicker:$("metricPicker")
 };
 
 function showError(message){
@@ -364,7 +388,7 @@ function parseTrajectory(content){
     if(!inTable)continue;
     const values=[...line.matchAll(/[+-]?\d+(?:\.\d+)?/g)].map(m=>Number(m[0]));
     if(values.length>=3){
-      points.push({t:values[0],ra:values[1],fpm:values[2],vvi:values[3]??null,ias:values[4]??null,gs:values[5]??null,pitch:values[6]??null,aoa:values[7]??null,roll:values[8]??null});
+      points.push({t:values[0],ra:values[1],fpm:values[2],vvi:values[3]??null,ias:values[4]??null,gs:values[5]??null,pitch:values[6]??null,aoa:values[7]??null,roll:values[8]??null,physicalFpm:values[9]??null});
       dataStarted=true
     }else if(dataStarted)break
   }
@@ -401,6 +425,10 @@ function parseReport(fileName,content){
     timestamp:firstField(fields,["落地时间（本地时间）"]),
     evaluation:evaluation||"未提供",explanation:firstField(fields,["评价说明"]),status:statusCode(evaluation),
     fpm:parseNumber(fpmText),fpmText:fpmText||"无数据",g:parseNumber(gText),gText:gText||"无数据",
+    fpmSource:firstField(fields,["下降率取值","FPM采用来源"]),fpmConfidence:firstField(fields,["FPM数据可信度"]),
+    fpmMethod:firstField(fields,["下降率取值说明","FPM采用方式"]),trajectorySource:firstField(fields,["轨迹下降率取值","轨迹FPM数据源"]),
+    physicalFpm:firstField(fields,["250 ms 物理速度第25百分位"]),
+    vviFpm:firstField(fields,["同窗 VVI 中位数"]),aglFpm:firstField(fields,["第三链 AGL 高度变化下降率"]),
     airport,airportText:airportText||airport,aircraft,runway,ias,gs,
     tasText:firstField(fields,["真空速（TAS）"]),aoaText,aoaDeg:parseNumber(aoaText),
     rollText,rollDeg:parseRoll(rollText),headingText,headingDeg:parseNumber(headingText),
@@ -418,6 +446,9 @@ function parseReport(fileName,content){
     touchG:parseNumber(firstField(fields,["触地帧过载"])),
     peakG:parseNumber(firstField(fields,["第一次压缩原始峰值","短窗口原始峰值"])),
     curveG:parseNumber(firstField(fields,["第75百分位曲线 G","稳健采样值"])),
+    localEventG:parseNumber(firstField(fields,["160 ms 局部冲击包络 G"])),
+    robustEventG:parseNumber(firstField(fields,["中可信度稳健冲击 G"])),
+    gMethod:firstField(fields,["最终 G 采用方式"]),
     baselineG:parseNumber(firstField(fields,["接地前垂直 G 基线"])),
     equivalentG:parseNumber(firstField(fields,["冲量等效 G","FPM/G 一致性上限"])),
     consistencyText:firstField(fields,["冲量一致性误差"]),
@@ -559,7 +590,7 @@ function addCompareMetric(root,label,primary,comparison,delta){
   values.append(main,reference);item.append(heading,values,deltaNode);root.append(item)
 }
 function renderComparison(primary,comparison){
-  const visible=Boolean(comparison);ui.comparePanel.hidden=!visible;ui.chartLegend.hidden=!visible;
+  const visible=Boolean(comparison);ui.comparePanel.hidden=!visible;
   setCompareLine("fpmCompareLine",visible&&Number.isFinite(comparison.fpm)?`对比 ${Math.round(comparison.fpm)} fpm · ${fpmDelta(primary.fpm,comparison.fpm)}`:"",visible);
   setCompareLine("gCompareLine",visible&&Number.isFinite(comparison.g)?`对比 ${comparison.g.toFixed(2)} G · ${signedDelta(primary.g,comparison.g,2," G")}`:"",visible);
   setCompareLine("speedCompareLine",visible?`对比 ${Number.isFinite(comparison.ias)?Math.round(comparison.ias):"--"} / ${Number.isFinite(comparison.gs)?Math.round(comparison.gs):"--"} kt`:"",visible);
@@ -567,8 +598,6 @@ function renderComparison(primary,comparison){
   if(!visible)return;
   setText("compareTitle",`${comparison.airport} · RWY${comparison.runway} · ${comparison.aircraft}`);
   setText("compareMeta",`${comparison.timestamp||comparison.fileName} · ${comparison.evaluation}`);
-  setText("primaryLegend",`主要：${primary.fileName}`);
-  setText("compareLegend",`对比：${comparison.fileName}`);
   const root=$("compareMetrics");root.replaceChildren();
   addCompareMetric(root,"触地下降率",Number.isFinite(primary.fpm)?`${Math.round(primary.fpm)} fpm`:"--",Number.isFinite(comparison.fpm)?`${Math.round(comparison.fpm)} fpm`:"--",fpmDelta(primary.fpm,comparison.fpm));
   addCompareMetric(root,"最终载荷",fmt(primary.g,2," G"),fmt(comparison.g,2," G"),signedDelta(primary.g,comparison.g,2," G"));
@@ -595,9 +624,14 @@ function renderFacts(report){
 }
 function renderDiagnostics(report){
   const rows=[
+    ["下降率取值",report.fpmSource||"--"],["下降率取值说明",report.fpmMethod||"--"],
+    ["轨迹下降率取值",report.trajectorySource||report.fpmSource||"--"],["FPM 可信度",report.fpmConfidence||"--"],
+    ["物理 / VVI",`${report.physicalFpm||"--"} / ${report.vviFpm||"--"}`],["AGL 第三链",report.aglFpm||"--"],
     ["最终 G",fmt(report.g,3," G")],["触地帧 G",fmt(report.touchG,3," G")],
-    ["原始峰值",fmt(report.peakG,3," G")],["P75 / 稳健 G",fmt(report.curveG,3," G")],
+    ["原始峰值",fmt(report.peakG,3," G")],["全局 P75",fmt(report.curveG,3," G")],
+    ["160 ms 局部包络",fmt(report.localEventG,3," G")],["稳健事件 G",fmt(report.robustEventG,3," G")],
     ["接地前基线",fmt(report.baselineG,3," G")],["冲量等效 / 上限 G",fmt(report.equivalentG,3," G")],
+    ["最终 G 采用方式",report.gMethod||"--"],
     ["一致性误差",report.consistencyText||"--"],["数据可信度",report.confidenceText||"--"],
     ["有效样本",report.impactSamples||"--"],["分析耗时",report.analysisMs||"--"]
   ];
@@ -668,6 +702,7 @@ function renderReport(report,comparison=null){
   setText("reportExplanation",report.explanation||"该记录没有提供评价说明。");
   setText("statusLabel",label);setText("reportVersion",`报告版本 ${report.version}`);
   setText("fpmCard",Number.isFinite(report.fpm)?`${report.fpm>=0?"+":""}${Math.round(report.fpm)} fpm`:"-- fpm");
+  setText("fpmSourceHint",report.fpmSource||"该记录未提供下降率取值说明");
   setText("gCard",fmt(report.g,2," G"));
   setText("speedCard",`${Number.isFinite(report.ias)?Math.round(report.ias):"--"} kt / ${Number.isFinite(report.gs)?Math.round(report.gs):"--"} kt`);
   setText("flareCard",Number.isFinite(report.flareMetric)?report.flareMetric.toFixed(1):"--");
@@ -683,7 +718,7 @@ function renderReport(report,comparison=null){
   renderFacts(report);renderDiagnostics(report);renderWind(report);renderPose(report);renderRunway(report);
   $("rawText").textContent=report.raw;$("rawDetails").open=false;
   ui.context.hidden=true;ui.contextToggle.textContent="显示着陆上下文详情";ui.contextToggle.setAttribute("aria-expanded","false");
-  drawFlare(report.trajectory,color,comparison?.trajectory||[])
+  drawFlare(report.trajectory,comparison?.trajectory||[])
 }
 function findFiftyFtTime(data){
   for(let i=1;i<data.length;i++){
@@ -701,68 +736,139 @@ function nearestPoint(data,targetTime){
   for(const point of data){const gap=Math.abs(point.t-targetTime);if(gap<distance){distance=gap;best=point}}
   return best
 }
-function drawFlare(data,statusColor,compareData=[]){
-  const chartBox=$("chartBox"),empty=$("chartEmpty");
-  if(data.length<2){chartBox.hidden=true;empty.hidden=false;ui.canvas._plot=null;return}
+function selectedMetricDefs(){return state.selectedMetrics.map(key=>metricByKey[key]).filter(Boolean)}
+function saveMetricPreference(){
+  try{localStorage.setItem(METRIC_PREFERENCE_KEY,JSON.stringify(state.selectedMetrics))}catch{}
+}
+function renderMetricPicker(){
+  ui.metricPicker.replaceChildren();
+  for(const metric of TRAJECTORY_METRICS){
+    const chip=document.createElement("label");chip.className="metric-chip"+(state.selectedMetrics.includes(metric.key)?" selected":"");
+    chip.style.setProperty("--metric",metric.color);
+    const input=document.createElement("input");input.type="checkbox";input.value=metric.key;input.checked=state.selectedMetrics.includes(metric.key);
+    const dot=document.createElement("i");dot.className="metric-dot";
+    const label=document.createElement("span");label.textContent=metric.label;
+    input.addEventListener("change",()=>{
+      if(input.checked){
+        if(!state.selectedMetrics.includes(metric.key))state.selectedMetrics.push(metric.key)
+      }else{
+        if(state.selectedMetrics.length===1){input.checked=true;return}
+        state.selectedMetrics=state.selectedMetrics.filter(key=>key!==metric.key)
+      }
+      saveMetricPreference();renderMetricPicker();redrawTrajectoryChart()
+    });
+    chip.append(input,dot,label);ui.metricPicker.append(chip)
+  }
+}
+function metricValueText(metric,value){
+  if(!Number.isFinite(value))return"--";
+  return`${value>=0&&metric.group==="verticalSpeed"?"+":""}${value.toFixed(metric.decimals)} ${metric.unit}`
+}
+function metricRangeText(metric,scale){
+  return`${scale.min.toFixed(metric.decimals)}–${scale.max.toFixed(metric.decimals)} ${metric.unit}`
+}
+function buildMetricScales(metrics,data,compareData){
+  const groups={};
+  for(const metric of metrics){
+    const bucket=groups[metric.group]||(groups[metric.group]={group:metric.group,unit:metric.unit,values:[]});
+    for(const point of [...data,...compareData])if(Number.isFinite(point[metric.key]))bucket.values.push(point[metric.key])
+  }
+  for(const bucket of Object.values(groups)){
+    let min=Math.min(...bucket.values),max=Math.max(...bucket.values);
+    if(bucket.group==="verticalSpeed"){max=Math.max(0,max)}
+    if(bucket.group==="altitude"||bucket.group==="attitude"){min=Math.min(0,min);max=Math.max(0,max)}
+    let span=max-min;
+    if(!Number.isFinite(span)||span===0){const center=Number.isFinite(min)?min:0;span=Math.max(2,Math.abs(center)*.2);min=center-span/2;max=center+span/2}
+    const pad=span*.08;bucket.min=min-pad;bucket.max=max+pad
+  }
+  return groups
+}
+function renderChartLegend(series,scales){
+  ui.chartLegend.replaceChildren();
+  for(const item of series){
+    const metric=item.metric,legend=document.createElement("div");legend.className="legend-item";legend.style.setProperty("--series-color",metric.color);
+    const line=document.createElement("i");line.className="legend-line";
+    const label=document.createElement("span");label.textContent=metric.label;
+    const range=document.createElement("small");range.textContent=metricRangeText(metric,scales[metric.group]);
+    legend.append(line,label,range);ui.chartLegend.append(legend)
+  }
+  ui.chartLegend.hidden=!series.length
+}
+function drawMetricLine(c,points,metric,X,Y,comparison=false){
+  if(points.length<2)return;
+  c.save();c.strokeStyle=metric.color;c.lineWidth=comparison?3.5:2.6;c.lineJoin="round";c.lineCap="round";
+  c.globalAlpha=comparison?.24:1;c.setLineDash(comparison?[8,7]:[]);c.shadowColor=metric.color;c.shadowBlur=comparison?5:3;c.beginPath();
+  points.forEach((point,index)=>{const x=X(point.t),y=Y(metric,point[metric.key]);index?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();c.restore()
+}
+function drawFlare(data,compareData=[]){
+  const chartBox=$("chartBox"),empty=$("chartEmpty"),validCompare=compareData.length>=2?compareData:[];
+  const metrics=selectedMetricDefs();
+  const series=metrics.map(metric=>({
+    metric,
+    main:data.filter(point=>Number.isFinite(point.t)&&Number.isFinite(point[metric.key])),
+    compare:validCompare.filter(point=>Number.isFinite(point.t)&&Number.isFinite(point[metric.key]))
+  })).filter(item=>item.main.length>=2||item.compare.length>=2);
+  if(data.length<2||!series.length){
+    chartBox.hidden=true;empty.hidden=false;empty.textContent=data.length<2?"该日志没有可绘制的 0.5 秒聚合轨迹。":"所选数据源在当前记录中没有足够样本。";
+    ui.canvas._plot=null;ui.chartLegend.hidden=true;return
+  }
   chartBox.hidden=false;empty.hidden=true;
-  const validCompare=compareData.length>=2?compareData:[];
+  const scales=buildMetricScales(series.map(item=>item.metric),data,validCompare);renderChartLegend(series,scales);
   const canvas=ui.canvas,box=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
   canvas.width=Math.max(1,Math.floor(box.width*dpr));canvas.height=Math.max(1,Math.floor(box.height*dpr));
   const c=canvas.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);
-  const W=box.width,H=box.height,p={l:58,r:20,t:18,b:42},pw=W-p.l-p.r,ph=H-p.t-p.b;
-  const combined=validCompare.length?[...data,...validCompare]:data;
-  const ts=combined.map(x=>x.t),ys=combined.map(x=>x.fpm).filter(Number.isFinite);
-  let xmin=Math.min(...ts),xmax=Math.max(...ts),ymin=Math.min(...ys),ymax=Math.max(...ys);
-  ymax=Math.max(0,ymax);const rawSpan=Math.max(60,ymax-ymin);ymax+=rawSpan*.06;ymin-=rawSpan*.10;
-  const X=x=>p.l+(x-xmin)/(xmax-xmin||1)*pw,Y=y=>p.t+(ymax-y)/(ymax-ymin||1)*ph;
+  const groupKeys=Object.keys(scales),singleScale=groupKeys.length===1,p={l:singleScale?68:48,r:20,t:18,b:42},W=box.width,H=box.height,pw=W-p.l-p.r,ph=H-p.t-p.b;
+  const timeline=[...data,...validCompare].map(point=>point.t).filter(Number.isFinite),xmin=Math.min(...timeline),xmax=Math.max(...timeline);
+  const X=x=>p.l+(x-xmin)/(xmax-xmin||1)*pw;
+  const Y=(metric,value)=>{
+    const scale=scales[metric.group];
+    return p.t+(scale.max-value)/(scale.max-scale.min||1)*ph
+  };
   c.clearRect(0,0,W,H);c.font="11px Microsoft YaHei";c.lineWidth=1;
   for(let i=0;i<=4;i++){
-    const y=p.t+ph*i/4,v=ymax-(ymax-ymin)*i/4;c.strokeStyle="#294657";c.beginPath();c.moveTo(p.l,y);c.lineTo(W-p.r,y);c.stroke();
-    c.fillStyle="#91a7b3";c.textAlign="right";c.fillText(`${Math.round(v)} fpm`,p.l-8,y+4)
+    const y=p.t+ph*i/4;c.strokeStyle="#294657";c.beginPath();c.moveTo(p.l,y);c.lineTo(W-p.r,y);c.stroke();
+    c.fillStyle="#91a7b3";c.textAlign="right";
+    if(singleScale){
+      const scale=scales[groupKeys[0]],value=scale.max-(scale.max-scale.min)*i/4;
+      c.fillText(`${value.toFixed(Math.abs(value)<20?1:0)} ${scale.unit}`,p.l-8,y+4)
+    }else c.fillText(`${100-i*25}%`,p.l-8,y+4)
   }
   for(let i=0;i<=5;i++){
-    const x=p.l+pw*i/5,v=xmin+(xmax-xmin)*i/5;c.strokeStyle="#223d4f";c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
-    c.fillStyle="#91a7b3";c.textAlign="center";c.fillText(`${v.toFixed(1)}s`,x,H-14)
+    const x=p.l+pw*i/5,value=xmin+(xmax-xmin)*i/5;c.strokeStyle="#223d4f";c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
+    c.fillStyle="#91a7b3";c.textAlign="center";c.fillText(`${value.toFixed(1)}s`,x,H-14)
   }
-  const zeroY=Y(0);c.save();c.setLineDash([8,6]);c.strokeStyle="#d7f3ff";c.lineWidth=2;c.beginPath();c.moveTo(p.l,zeroY);c.lineTo(W-p.r,zeroY);c.stroke();
-  c.setLineDash([]);c.fillStyle="#d7f3ff";c.textAlign="left";c.font="700 11px Microsoft YaHei";c.fillText("0 fpm 参照线",p.l+8,Math.max(p.t+12,zeroY-7));c.restore();
-
+  const fpmMetric=series.find(item=>item.metric.group==="verticalSpeed")?.metric,verticalScale=scales.verticalSpeed;
+  if(fpmMetric&&verticalScale.min<=0&&verticalScale.max>=0){
+    const zeroY=Y(fpmMetric,0);c.save();c.setLineDash([8,6]);c.strokeStyle="#d7f3ff";c.globalAlpha=.75;c.lineWidth=1.5;c.beginPath();c.moveTo(p.l,zeroY);c.lineTo(W-p.r,zeroY);c.stroke();
+    c.setLineDash([]);c.fillStyle="#d7f3ff";c.textAlign="left";c.font="700 10px Microsoft YaHei";c.fillText("0 fpm",p.l+7,Math.max(p.t+11,zeroY-6));c.restore()
+  }
   const compareFifty=findFiftyFtTime(validCompare);
   if(compareFifty!==null){
-    const x=X(compareFifty);c.save();c.globalAlpha=.58;c.setLineDash([2,6]);c.strokeStyle="#91a7b3";c.lineWidth=1.5;c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
+    const x=X(compareFifty);c.save();c.globalAlpha=.38;c.setLineDash([2,6]);c.strokeStyle="#91a7b3";c.lineWidth=1.5;c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
     c.setLineDash([]);c.fillStyle="#b7c8d0";c.font="700 10px Microsoft YaHei";c.textAlign="left";c.fillText("RA 50 ft 对比",x+6,p.t+30);c.restore()
   }
-  if(validCompare.length){
-    c.save();c.globalAlpha=.42;c.setLineDash([8,7]);c.strokeStyle="#a9bcc6";c.lineWidth=2;c.lineJoin="round";c.beginPath();
-    validCompare.forEach((point,index)=>{const x=X(point.t),y=Y(point.fpm);index?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();c.restore()
-  }
-
-  const grad=c.createLinearGradient(0,p.t,0,p.t+ph);grad.addColorStop(0,statusColor);grad.addColorStop(1,"#2f8dcc");
-  c.beginPath();data.forEach((point,index)=>{const x=X(point.t),y=Y(point.fpm);index?c.lineTo(x,y):c.moveTo(x,y)});
-  c.lineTo(X(data.at(-1).t),p.t+ph);c.lineTo(X(data[0].t),p.t+ph);c.closePath();
-  const fill=c.createLinearGradient(0,p.t,0,p.t+ph);fill.addColorStop(0,`${statusColor}45`);fill.addColorStop(1,`${statusColor}04`);c.fillStyle=fill;c.fill();
-  c.strokeStyle=grad;c.lineWidth=3;c.setLineDash([]);c.lineJoin="round";c.beginPath();
-  data.forEach((point,index)=>{const x=X(point.t),y=Y(point.fpm);index?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();
+  for(const item of series)drawMetricLine(c,item.compare,item.metric,X,Y,true);
+  for(const item of series)drawMetricLine(c,item.main,item.metric,X,Y,false);
   const fifty=findFiftyFtTime(data);
   if(fifty!==null){
     const x=X(fifty),right=x<p.l+pw*.78;c.save();c.setLineDash([5,5]);c.strokeStyle="#ffca58";c.lineWidth=2;c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
     c.setLineDash([]);c.fillStyle="#ffdc8a";c.font="700 11px Microsoft YaHei";c.textAlign=right?"left":"right";c.fillText("RA 50 ft 主要",x+(right?7:-7),p.t+14);c.restore()
   }
-  canvas._plot={X,Y,p,pw,xmin,xmax,data,compareData:validCompare}
+  canvas._plot={X,Y,p,pw,xmin,xmax,data,compareData:validCompare,metrics:series.map(item=>item.metric),scales}
+}
+function pointMetricSummary(point,metrics){
+  return metrics.filter(metric=>Number.isFinite(point?.[metric.key])).map(metric=>`${metric.label} ${metricValueText(metric,point[metric.key])}`).join(" · ")
 }
 function hoverChart(event){
   const plot=ui.canvas._plot;if(!plot)return;
   const rect=ui.canvas.getBoundingClientRect(),mx=event.clientX-rect.left;
   const ratio=clamp((mx-plot.p.l)/(plot.pw||1),0,1),targetTime=plot.xmin+(plot.xmax-plot.xmin)*ratio;
-  const main=nearestPoint(plot.data,targetTime),reference=nearestPoint(plot.compareData,targetTime);
-  if(!main)return;
-  const lines=[
-    `T+${main.t.toFixed(2)} s`,
-    `主要  ${Math.round(main.fpm)} fpm · RA ${Number.isFinite(main.ra)?main.ra.toFixed(1):"--"} ft · IAS ${Number.isFinite(main.ias)?Math.round(main.ias):"--"} kt`
-  ];
-  if(reference)lines.push(`对比  ${Math.round(reference.fpm)} fpm · RA ${Number.isFinite(reference.ra)?reference.ra.toFixed(1):"--"} ft · IAS ${Number.isFinite(reference.ias)?Math.round(reference.ias):"--"} kt`);
-  ui.tip.style.display="block";ui.tip.style.left=`${Math.min(rect.width-250,Math.max(8,plot.X(main.t)+14))}px`;
-  ui.tip.style.top=`${Math.max(8,plot.Y(main.fpm)-58)}px`;ui.tip.textContent=lines.join("\n")
+  const main=nearestPoint(plot.data,targetTime),reference=nearestPoint(plot.compareData,targetTime);if(!main)return;
+  const lines=[`主要 T+${main.t.toFixed(2)} s · RA ${Number.isFinite(main.ra)?main.ra.toFixed(1):"--"} ft`,pointMetricSummary(main,plot.metrics)];
+  if(reference)lines.push(`对比 T+${reference.t.toFixed(2)} s · RA ${Number.isFinite(reference.ra)?reference.ra.toFixed(1):"--"} ft`,pointMetricSummary(reference,plot.metrics));
+  const anchor=plot.metrics.find(metric=>Number.isFinite(main[metric.key]));
+  ui.tip.style.display="block";ui.tip.style.left=`${Math.min(rect.width-330,Math.max(8,plot.X(main.t)+14))}px`;
+  ui.tip.style.top=`${Math.max(8,anchor?plot.Y(anchor,main[anchor.key])-70:20)}px`;ui.tip.textContent=lines.filter(Boolean).join("\n")
 }
 function activeRecord(){return state.records.find(item=>item.id===state.activeId)}
 function comparisonRecord(){return state.records.find(item=>item.id===state.compareId)}
@@ -796,11 +902,13 @@ ui.contextToggle.addEventListener("click",()=>{
 ["dragenter","dragover"].forEach(type=>document.addEventListener(type,event=>{event.preventDefault();ui.drop.classList.add("drag")}));
 ["dragleave","drop"].forEach(type=>document.addEventListener(type,event=>{event.preventDefault();ui.drop.classList.remove("drag")}));
 document.addEventListener("drop",event=>importFiles(event.dataTransfer.files,"main"));
-ui.canvas.addEventListener("mousemove",hoverChart);ui.canvas.addEventListener("mouseleave",()=>ui.tip.style.display="none");
-window.addEventListener("resize",()=>{
+function redrawTrajectoryChart(){
   const primary=activeRecord(),comparison=comparisonRecord();
-  if(primary)drawFlare(primary.report.trajectory,statusVisual(primary.report.status)[0],comparison?.report.trajectory||[])
-});
+  if(primary)drawFlare(primary.report.trajectory,comparison?.report.trajectory||[])
+}
+ui.canvas.addEventListener("mousemove",hoverChart);ui.canvas.addEventListener("mouseleave",()=>ui.tip.style.display="none");
+renderMetricPicker();
+window.addEventListener("resize",redrawTrajectoryChart);
 
 
 async function loadLuaLaunchReport(){
