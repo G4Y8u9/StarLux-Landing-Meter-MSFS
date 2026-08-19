@@ -55,7 +55,12 @@ MIN_AGL_PAIR_GAP_SECONDS = 0.035
 MAX_AGL_SAMPLES = 64
 AGL_END_GUARD_SECONDS = 0.04
 TERMINAL_AGL_FT = 5.0
-# MSFS 适配：RADIO HEIGHT / PLANE ALT ABOVE GROUND 在触地前约 0.25 s 出现
+# MSFS 数据源修正：视频逐帧比对确认 RADIO HEIGHT / PLANE ALT ABOVE GROUND
+# 在接地前存在约 +12.7 ft 的固定偏高（接地前 RA 平台约 12.7 ft，连续多次落地一致），
+# 并非真实高度变化。接地确认后把接地前所有离地样本的 RA 统一减去该偏移（不低于 0）
+# 再分析，使 0.5 秒聚合轨迹表的 RA 与 AGL 几何链使用修正后的高度。
+RA_BIAS_OFFSET_FT = 12.7
+# MSFS 适配：修正前 RADIO HEIGHT / PLANE ALT ABOVE GROUND 在触地前约 0.25 s 出现
 # ~11.7 ft 平台（接地帧仍读十余英尺、不归零），AGL≤5 ft 终端窗口永远为空。
 # 几何闭合链改用更长的 0.85 s 窗口（进近段 AGL 仍与物理下降率吻合）。
 AGL_CLOSURE_WINDOW_SECONDS = 0.85
@@ -1234,6 +1239,17 @@ def analyze_landing(samples, touchdown_sample):
     pre_touch_time = touch_time - PRE_TOUCH_BUFFER_SECONDS
     pre_touch_samples = [s for s in samples if s.t <= touch_time and s.t >= pre_touch_time]
 
+    # MSFS 数据源修正：RADIO HEIGHT 在接地前存在约 +12.7 ft 的固定偏高
+    # （RA_BIAS_OFFSET_FT，视频逐帧比对确认）。接地确认后把接地前所有
+    # 离地样本的 RA 统一减去该偏移（不低于 0）再分析；接地后样本保持原值，
+    # 使 0.5 秒聚合轨迹表的 RA 与 AGL 几何链使用修正后的高度。
+    corrected_samples = [
+        s._replace(agl_ft=max(0.0, s.agl_ft - RA_BIAS_OFFSET_FT))
+        if (s.t < touch_time and not s.on_ground and s.agl_ft is not None)
+        else s
+        for s in samples
+    ]
+
     raw_touchdown_fpm = (
         pre_touch_samples[0].fpm
         if len(pre_touch_samples) < 5
@@ -1245,7 +1261,7 @@ def analyze_landing(samples, touchdown_sample):
     vvi_fpm, vvi_min_fpm, vvi_sample_count, vvi_valid = compute_vvi_metrics(samples, touch_time, raw_touchdown_fpm)
     physical_fpm, physical_sample_count, physical_valid = compute_physical_fpm(samples, touch_time)
     physical_short_fpm = compute_short_physical_median(samples, touch_time - PHYSICAL_FPM_SHORT_WINDOW_SECONDS, touch_time)
-    agl_fpm, agl_sample_count, agl_sample_span, agl_pair_count = compute_agl_closure_fpm(samples, touch_time)
+    agl_fpm, agl_sample_count, agl_sample_span, agl_pair_count = compute_agl_closure_fpm(corrected_samples, touch_time)
     agl_valid = agl_fpm is not None
 
     fpm_difference = (physical_fpm - vvi_fpm) if physical_fpm is not None and vvi_fpm is not None else 0
@@ -1317,7 +1333,9 @@ def analyze_landing(samples, touchdown_sample):
     runway = estimated_runway_from_heading(heading)
 
     # ---- 拉平曲线（完整复现 Lua 版 v1.1 update_flare_trace + analyze_flare_curve）----
-    flare_trace_result = reconstruct_flare_trace(samples, touch_time)
+    # 使用修正 RA 后的样本重建轨迹：轨迹在修正后 100 ft 处启动（原始 RA ~112.7 ft），
+    # 既修正了轨迹表 RA 数值，又自动向前多缓存约 1.2 s 进近数据，首行仍约 100 ft。
+    flare_trace_result = reconstruct_flare_trace(corrected_samples, touch_time)
     flare_start_time = flare_trace_result['start_time']
     # 与 Lua 版一致：拉平曲线下降率取值由三链验证结果决定（PHYSICAL / VVI）。
     selected_fpm_source = lambda s: (s.local_vy_mps * 196.850394) if flare_fpm_source == "PHYSICAL" else (s.fpm or 0.0)
