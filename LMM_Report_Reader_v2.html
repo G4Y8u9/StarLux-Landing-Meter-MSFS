@@ -1,0 +1,1390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>StarLux LMM 报告阅读器 v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F8FAFC;
+  --panel:rgba(255,255,255,.74);
+  --panel-solid:#FFFFFF;
+  --line:rgba(13,38,64,.10);
+  --line2:rgba(13,38,64,.16);
+  --text:#0B1F33;
+  --muted:#5B6E80;
+  --soft:#3E5C74;
+  --accent:#0066FF;
+  --accent-2:#00C2FF;
+  --cyan:#00F2FE;
+  --purple:#7C3AED;
+  --danger:#E11D48;
+  --status:#596773;
+  --glass:rgba(255,255,255,.62);
+  --shadow:0 20px 50px rgba(13,38,64,.10),0 2px 10px rgba(13,38,64,.05);
+  --shadow-soft:0 10px 30px rgba(13,38,64,.08);
+  --glow:0 0 0 1px rgba(0,102,255,.12),0 14px 34px rgba(0,102,255,.18);
+  --radius:18px;
+  --radius-sm:12px
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;min-height:100vh;color:var(--text);
+  font-family:"Inter","Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:
+    radial-gradient(1000px 560px at 88% -8%,rgba(0,242,254,.16),transparent 62%),
+    radial-gradient(900px 520px at -6% 4%,rgba(124,58,237,.12),transparent 58%),
+    radial-gradient(760px 460px at 55% 115%,rgba(0,102,255,.10),transparent 60%),
+    linear-gradient(180deg,#FFFFFF 0%,#F6F9FD 55%,#F1F6FB 100%);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility
+}
+button,input{font:inherit}
+button{color:inherit}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.app{max-width:1480px;margin:auto;padding:28px 22px 60px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.brand{
+  color:var(--text);font-size:13px;font-weight:800;letter-spacing:.06em;
+  background:linear-gradient(120deg,var(--accent),var(--purple));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0
+}
+.top-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lang-toggle{
+  border:1px solid var(--line2);background:var(--glass);backdrop-filter:blur(10px);
+  border-radius:999px;padding:8px 16px;cursor:pointer;font-weight:700;font-size:12px;color:var(--accent);
+  transition:.18s ease;white-space:nowrap
+}
+.lang-toggle:hover{transform:translateY(-2px);box-shadow:var(--glow);border-color:rgba(0,102,255,.4)}
+.privacy{border:1px solid rgba(22,163,74,.28);background:rgba(22,163,74,.08);color:#15803D;border-radius:999px;padding:7px 13px;font-size:11px;white-space:nowrap}
+.workspace{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+.sidebar{
+  position:sticky;top:20px;border:1px solid var(--line);
+  background:var(--glass);backdrop-filter:blur(18px) saturate(1.5);
+  border-radius:22px;padding:18px;box-shadow:var(--shadow)
+}
+.side-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.side-title h2{font-size:16px;margin:0}
+.count{color:var(--accent);background:rgba(0,102,255,.10);border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700}
+.btn{
+  border:1px solid var(--line2);background:var(--panel-solid);border-radius:12px;padding:10px 14px;
+  cursor:pointer;font-weight:700;transition:.18s ease;white-space:nowrap;font-size:13px
+}
+.btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-soft);border-color:rgba(0,102,255,.35)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));border:none;color:#fff;box-shadow:0 8px 22px rgba(0,102,255,.28)}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,102,255,.38)}
+.btn.ghost{background:transparent}
+.btn.ghost:hover{border-color:rgba(0,102,255,.4);background:rgba(0,102,255,.05)}
+.btn.danger{border-color:rgba(225,29,72,.35);color:var(--danger);background:rgba(225,29,72,.06)}
+.btn.danger:hover{border-color:var(--danger);background:rgba(225,29,72,.10);box-shadow:0 10px 24px rgba(225,29,72,.16)}
+.side-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-bottom:14px}
+.record-list{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 240px);overflow:auto;padding-right:3px}
+.record{
+  width:100%;border:1px solid var(--line);background:rgba(255,255,255,.85);border-radius:14px;
+  padding:11px;text-align:left;cursor:pointer;transition:.16s ease
+}
+.record:hover{transform:translateY(-2px);border-color:rgba(0,102,255,.35);box-shadow:var(--shadow-soft);background:#fff}
+.record.active{border-color:var(--status);box-shadow:inset 3px 0 0 var(--status),0 8px 22px rgba(13,38,64,.08);background:#fff}
+.record strong,.record span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.record strong{font-size:12px;margin-bottom:5px}
+.record span{font-size:10px;color:var(--muted)}
+.record-wrap{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:6px}
+.record.compare{border-style:dashed;border-color:rgba(124,58,237,.45);background:rgba(124,58,237,.05)}
+.compare-action{
+  border:1px solid var(--line2);background:#fff;border-radius:12px;padding:6px;cursor:pointer;
+  font-size:10px;color:var(--soft);transition:.15s ease;white-space:nowrap
+}
+.compare-action:hover{background:rgba(0,102,255,.07);border-color:rgba(0,102,255,.4)}
+.compare-action:disabled{cursor:default;opacity:.58;transform:none}
+.compare-action.selected{border-style:dashed;border-color:var(--purple);color:var(--purple);background:rgba(124,58,237,.08)}
+.side-note{color:var(--muted);font-size:10px;line-height:1.7;margin-top:14px}
+.main{min-width:0}
+.drop{
+  min-height:560px;border:2px dashed rgba(0,102,255,.28);border-radius:26px;
+  background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(240,246,252,.7));
+  backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;padding:38px;text-align:center;
+  transition:.18s ease;box-shadow:var(--shadow)
+}
+.drop.drag{border-color:var(--accent);background:rgba(235,244,255,.95);transform:scale(1.004)}
+.drop-inner{max-width:620px}
+.drop-mark{
+  width:92px;height:92px;margin:0 auto 24px;border:1px solid rgba(0,102,255,.3);border-radius:26px;
+  display:grid;place-items:center;background:linear-gradient(135deg,rgba(0,102,255,.08),rgba(0,242,254,.12));
+  color:var(--accent);font-size:38px;font-weight:300;cursor:pointer;transition:.16s ease
+}
+.drop-mark:hover{border-color:var(--accent);background:linear-gradient(135deg,rgba(0,102,255,.16),rgba(0,242,254,.22));color:#fff;transform:translateY(-2px);box-shadow:var(--glow)}
+.drop h1{font-size:30px;margin:0 0 12px}
+.drop p{color:var(--muted);line-height:1.8;margin:0 0 24px}
+.drop .formats{font-size:11px;color:var(--muted);margin-top:16px}
+.report[hidden],.drop[hidden],.context-detail[hidden],.compare-panel[hidden],.chart-legend[hidden]{display:none!important}
+.hero,.card,.section,.viz-card{
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(250,252,255,.78));
+  backdrop-filter:blur(14px);
+  border-radius:18px
+}
+.hero{position:relative;overflow:hidden;padding:28px 30px;box-shadow:var(--shadow)}
+.hero:after{
+  content:"";position:absolute;right:-50px;top:-90px;width:280px;height:230px;border-radius:50%;
+  background:linear-gradient(135deg,rgba(0,102,255,.16),rgba(0,242,254,.14));filter:blur(2px)
+}
+.hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center}
+.eyebrow{color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.14em;margin-bottom:10px;text-transform:uppercase}
+h1{font-size:clamp(22px,3vw,30px);line-height:1.2;margin:0 0 9px}
+.sub{color:var(--muted);font-size:13px;line-height:1.7}
+.hero-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.status{
+  min-width:220px;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(244,249,255,.9));
+  border-left:9px solid var(--status);border-radius:14px;padding:17px 18px;box-shadow:var(--shadow-soft)
+}
+.status small{display:block;color:var(--muted);margin-bottom:6px;font-size:11px}
+.status strong{font-size:18px}
+.status .version{font-size:11px;color:var(--muted);margin-top:5px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:15px}
+.card{padding:16px;min-height:110px;transition:.18s ease}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-soft);border-color:rgba(0,102,255,.25)}
+.card .label{font-size:11px;color:var(--muted);margin-bottom:10px}
+.card .value{font-size:clamp(18px,2vw,24px);font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere}
+.card .hint{font-size:11px;color:var(--soft);margin-top:7px;line-height:1.55}
+.card .compare-line{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line2);color:var(--soft);font-size:10px;line-height:1.5}
+.compare-panel{margin-top:15px;border:1px dashed rgba(124,58,237,.4);background:linear-gradient(180deg,rgba(245,242,255,.9),rgba(255,255,255,.85));backdrop-filter:blur(10px);border-radius:18px;padding:17px}
+.compare-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.compare-identity small{display:block;color:var(--muted);font-size:10px;margin-bottom:5px}
+.compare-identity strong{display:block;font-size:15px}
+.compare-identity span{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.compare-actions{display:flex;gap:7px;flex-wrap:wrap}
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.compare-metric{border-left:2px solid rgba(124,58,237,.55);background:rgba(255,255,255,.8);padding:9px 11px;border-radius:8px}
+.compare-metric .metric-label{display:block;color:var(--muted);font-size:9px;margin-bottom:6px}
+.compare-values{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:11px}
+.compare-values b{font-size:13px}.compare-values span{color:var(--soft)}
+.compare-delta{font-size:9px;color:var(--soft);margin-top:5px}
+.chart-tools{display:grid;gap:10px;margin:0 0 11px}
+.metric-picker{display:flex;gap:7px;flex-wrap:wrap}
+.metric-chip{
+  --metric:#0066FF;display:inline-flex;align-items:center;gap:6px;padding:7px 10px;
+  border:1px solid var(--line2);border-radius:999px;background:rgba(255,255,255,.8);
+  color:var(--soft);font-size:10px;cursor:pointer;user-select:none;transition:.15s ease
+}
+.metric-chip:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--metric) 55%,transparent);color:var(--text);box-shadow:var(--shadow-soft)}
+.metric-chip.selected{border-color:var(--metric);background:color-mix(in srgb,var(--metric) 10%,#fff);color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--metric) 30%,transparent),0 6px 16px color-mix(in srgb,var(--metric) 18%,transparent)}
+.metric-chip input{position:absolute;opacity:0;pointer-events:none}
+.metric-chip:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.metric-dot{width:8px;height:8px;border-radius:50%;background:var(--metric);box-shadow:0 0 8px color-mix(in srgb,var(--metric) 55%,transparent)}
+.chart-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--soft)}
+.legend-item{display:flex;align-items:center;gap:7px;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.7)}
+.legend-line{display:inline-block;width:24px;border-top:3px solid var(--series-color)}
+.legend-item small{color:var(--muted)}
+.chart-style-key{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:9px}
+.style-key{display:inline-flex;align-items:center;gap:6px}
+.style-line{width:24px;border-top:3px solid var(--accent)}
+.style-line.compare{border-top-style:dashed;opacity:.35}
+.chart-scale-note{color:var(--muted);font-size:9px;line-height:1.5}
+.layout{display:grid;grid-template-columns:1.45fr .75fr;gap:15px;margin-top:15px}
+.layout .section{display:flex;flex-direction:column}
+.section{padding:19px}
+.section h2,.viz-title{font-size:17px;margin:0 0 5px}
+.lead,.viz-sub{font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:16px}
+.meter-wrap{margin:16px 0 22px}
+.meter-head{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px}
+.meter{height:14px;border-radius:999px;background:linear-gradient(90deg,#2563EB 0 28.5%,#16A34A 28.5% 71.4%,#F59E0B 71.4% 85.7%,#E11D48 85.7%);position:relative;box-shadow:inset 0 0 0 1px rgba(13,38,64,.08)}
+.meter.g{background:linear-gradient(90deg,#2563EB 0 20%,#16A34A 20% 50%,#F59E0B 50% 80%,#E11D48 80%)}
+.pointer{position:absolute;top:-5px;width:4px;height:24px;border-radius:4px;background:#0B1F33;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+.scale{position:relative;height:16px;color:var(--muted);font-size:10px;margin-top:5px}
+.scale span{position:absolute;transform:translateX(-50%)}
+.scale span:first-child{transform:none}
+.scale span:last-child{transform:translateX(-100%)}
+.insight{border-left:4px solid var(--status);background:rgba(13,38,64,.045);padding:11px 13px;border-radius:8px;margin:9px 0;font-size:12px;line-height:1.65}
+.facts{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;gap:2px}
+.fact{display:flex;flex-direction:column;justify-content:center;padding:8px 2px;border-bottom:1px solid var(--line)}
+.fact span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+.fact b{font-size:16px;font-weight:700;overflow-wrap:anywhere}
+.context-detail{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:15px}
+.viz-card{padding:17px;min-height:278px;transition:.18s ease}
+.viz-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-soft)}
+.viz-caption{text-align:center;color:var(--soft);font-size:11px;line-height:1.6;margin-top:7px}
+.wind-board,.pose-board{
+  height:178px;border:1px solid var(--line2);border-radius:13px;background:#EAF2FB;position:relative;overflow:hidden
+}
+.wind-board{width:178px;border-radius:50%;margin:0 auto}
+.wind-board:before,.wind-board:after{content:"";position:absolute;background:#B9CDE0}
+.wind-board:before{width:1px;top:14px;bottom:14px;left:50%}
+.wind-board:after{height:1px;left:14px;right:14px;top:50%}
+.plane-top{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);font-size:57px;color:#1F3A54;z-index:3}
+.nose-label{position:absolute;left:50%;top:7px;transform:translateX(-50%);font-size:9px;color:var(--muted);z-index:4;letter-spacing:.06em}
+.wind-arrow{position:absolute;left:calc(50% - 2px);top:20px;width:4px;height:49px;background:linear-gradient(180deg,var(--accent),var(--cyan));border-radius:4px;transform-origin:2px 69px;z-index:4;box-shadow:0 0 10px rgba(0,102,255,.5)}
+.wind-arrow:after{content:"";position:absolute;left:-5px;bottom:-5px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid var(--accent)}
+.pose-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pose-mini{border:1px solid var(--line2);background:#EAF2FB;border-radius:12px;padding:9px;text-align:center}
+.pose-mini b{font-size:10px}
+.pose-board{height:160px;border:0;border-radius:7px;margin-top:5px}
+.horizon{position:absolute;left:9%;right:9%;top:50%;height:2px;background:#AFC6DB}
+.plane-front{position:absolute;left:50%;top:50%;width:72%;height:34px;transform:translate(-50%,-50%)}
+.plane-front:before{content:"";position:absolute;left:0;right:0;top:15px;height:5px;background:#1F3A54;border-radius:50%}
+.plane-front:after{content:"";position:absolute;left:46%;top:0;width:8%;height:34px;background:#1F3A54;clip-path:polygon(50% 0,100% 100%,50% 78%,0 100%)}
+.airflow{position:absolute;left:8%;right:8%;top:54%;border-top:2px dashed var(--accent)}
+.airflow:before{content:"";position:absolute;left:-2px;top:-6px;border-right:8px solid var(--accent);border-top:5px solid transparent;border-bottom:5px solid transparent}
+.plane-side{position:absolute;left:13%;top:47%;width:75%;height:24px;background:#1F3A54;clip-path:polygon(0 55%,78% 12%,96% 28%,100% 50%,80% 72%,10% 83%)}
+.geometry-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);line-height:1.75;padding:18px}
+.chart-box{position:relative;flex:1;min-height:350px;margin-top:10px}
+canvas{display:block;width:100%;height:100%}
+.tooltip{
+  display:none;white-space:pre-line;position:absolute;pointer-events:none;
+  background:rgba(9,22,38,.92);backdrop-filter:blur(8px);border:1px solid rgba(120,180,230,.35);
+  border-radius:10px;padding:9px 11px;font-size:10px;line-height:1.55;color:#EAF4FB;
+  box-shadow:0 10px 28px rgba(9,22,38,.35);z-index:5;max-width:380px
+}
+.diag{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+.diag td{padding:8px;border-bottom:1px solid var(--line)}
+.diag td:first-child{color:var(--muted)}
+details{margin-top:15px;border:1px solid var(--line);background:rgba(255,255,255,.8);backdrop-filter:blur(10px);border-radius:14px;padding:14px}
+summary{cursor:pointer;font-weight:700;color:var(--soft)}
+pre{white-space:pre-wrap;word-break:break-word;font-family:Consolas,"Microsoft YaHei",monospace;font-size:10px;line-height:1.65;color:var(--text);max-height:540px;overflow:auto;padding:12px;background:#F1F6FB;border-radius:9px;border:1px solid var(--line)}
+.error{display:none;margin-bottom:12px;border:1px solid rgba(225,29,72,.4);background:rgba(225,29,72,.06);color:var(--danger);border-radius:11px;padding:11px 13px;font-size:12px}
+footer{color:var(--muted);font-size:10px;line-height:1.7;margin-top:21px;text-align:center}
+footer a{color:var(--accent)}
+footer a:hover{text-decoration:underline}
+@media(max-width:1080px){.workspace{grid-template-columns:1fr}.sidebar{position:static}.record-list{max-height:250px}.context-detail{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.compare-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.app{padding:18px 12px 40px}.layout,.hero-grid{grid-template-columns:1fr}.status{min-width:0}.facts{grid-template-columns:1fr}.pose-grid{grid-template-columns:1fr}.drop{min-height:480px}.topbar{align-items:flex-start;flex-direction:column}.compare-head{flex-direction:column}.compare-grid{grid-template-columns:1fr}}
+@media(max-width:470px){.grid{grid-template-columns:1fr}h1,.drop h1{font-size:24px}.hero{padding:21px}.privacy{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand" data-i18n="brand">STARLUX 落地指标监视器 · 报告阅读器 v2</div>
+    <div class="top-right">
+      <button class="lang-toggle" id="langToggle" type="button" title="Language">EN</button>
+      <div class="privacy" data-i18n="privacy">完全本地读取 · 数据不会上传</div>
+    </div>
+  </header>
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="side-title"><h2 data-i18n="recordsTitle">已载入记录</h2><span class="count" id="recordCount">0</span></div>
+      <div class="side-actions">
+        <button class="btn primary" id="addFiles" type="button" data-i18n="selectTxt">选择 TXT</button>
+        <button class="btn danger" id="clearFiles" type="button" title="只清除网页内存，不删除磁盘文件" data-i18n="clear">清空</button>
+      </div>
+      <div class="record-list" id="recordList"></div>
+      <div class="side-note" data-i18n="sideNote">点击记录主体切换主要数据；右侧“对比”按钮选择参考数据。关闭页面后自动清空，不会删除原始 TXT。</div>
+    </aside>
+    <main class="main">
+      <div class="error" id="errorBox"></div>
+      <section class="drop" id="dropZone">
+        <div class="drop-inner">
+          <div class="drop-mark" id="dropMark" data-i18n-title="chooseLog" title="选择落地日志">＋</div>
+          <h1 data-i18n="dropTitle">把落地日志拖到这里</h1>
+          <p data-i18n-html="dropDesc">无需启动 X-Plane / MSFS。<br> 选择一份或多份 <b>Starlux_Report_*.txt</b>，网页会立即在本机解析评分、载荷、风向、姿态和 100 ft 后拉平轨迹。</p>
+          <button class="btn primary" id="chooseFiles" type="button" data-i18n="chooseLogs">选择落地日志</button>
+          <div class="formats" data-i18n="dropFormats">支持 StarLux LMM 早期日志及 0.7–1.1 记录 · 可多选</div>
+        </div>
+      </section>
+      <section class="report" id="report" hidden>
+        <section class="hero">
+          <div class="hero-grid">
+            <div>
+              <div class="eyebrow" id="reportTime">LANDING REPORT</div>
+              <h1 id="reportTitle">--</h1>
+              <div class="sub" id="reportExplanation">--</div>
+              <div class="hero-actions">
+                <button class="btn ghost" id="loadMore" type="button" data-i18n="loadMore">载入更多日志</button>
+                <button class="btn ghost" id="chooseCompare" type="button" data-i18n="chooseCompare">选择对比日志</button>
+              </div>
+            </div>
+            <div class="status">
+              <small data-i18n="finalRating">最终评价</small>
+              <strong id="statusLabel">--</strong>
+              <div class="version" id="reportVersion">--</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="compare-panel" id="comparePanel" hidden>
+          <div class="compare-head">
+            <div class="compare-identity"><small data-i18n="compareTitleLabel">当前对比数据</small><strong id="compareTitle">--</strong><span id="compareMeta">--</span></div>
+            <div class="compare-actions">
+              <button class="btn ghost" id="swapComparison" type="button" data-i18n="swapCompare">交换主／对比</button>
+              <button class="btn ghost" id="cancelComparison" type="button" data-i18n="cancelCompare">取消对比</button>
+            </div>
+          </div>
+          <div class="compare-grid" id="compareMetrics"></div>
+        </section>
+
+        <section class="grid">
+          <article class="card"><div class="label" data-i18n="cardFpm">触地下降率</div><div class="value" id="fpmCard">--</div><div class="hint" id="fpmSourceHint" data-i18n="cardFpmHint">按报告记录的下降率来源显示</div><div class="compare-line" id="fpmCompareLine" hidden></div></article>
+          <article class="card"><div class="label" data-i18n="cardG">最终载荷</div><div class="value" id="gCard">--</div><div class="hint" data-i18n="cardGHint">沿用原报告最终显示值</div><div class="compare-line" id="gCompareLine" hidden></div></article>
+          <article class="card"><div class="label" data-i18n="cardSpeed">指示空速 / 地速</div><div class="value" id="speedCard">--</div><div class="hint" data-i18n="cardSpeedHint">IAS / GS</div><div class="compare-line" id="speedCompareLine" hidden></div></article>
+          <article class="card"><div class="label" data-i18n="cardFlare">拉平曲率</div><div class="value" id="flareCard">--</div><div class="hint" id="flareHint" data-i18n="cardFlareHint">该记录未提供拉平分析</div><div class="compare-line" id="flareCompareLine" hidden></div></article>
+        </section>
+
+        <div class="layout">
+          <section class="section">
+            <h2 data-i18n="scoreTitle">评分构成</h2><div class="lead" data-i18n="scoreLead">按当前日志中的 FPM 与 G 解释评分，不改写原报告结论。</div>
+            <div class="meter-wrap">
+              <div class="meter-head"><span data-i18n="meterFpm">下降率</span><b id="fpmMeterValue">--</b></div>
+              <div class="meter"><i class="pointer" id="fpmPointer"></i></div>
+              <div class="scale">
+                <span style="left:0%">0</span>
+                <span style="left:28.57%">100</span>
+                <span style="left:71.43%">250</span>
+                <span style="left:85.71%">300+</span>
+              </div>
+            </div>
+            <div class="meter-wrap">
+              <div class="meter-head"><span data-i18n="meterG">接地载荷</span><b id="gMeterValue">--</b></div>
+              <div class="meter g"><i class="pointer" id="gPointer"></i></div>
+              <div class="scale">
+                <span style="left:0%">1.00</span>
+                <span style="left:20%">1.20</span>
+                <span style="left:50%">1.50</span>
+                <span style="left:80%">1.80+</span>
+              </div>
+            </div>
+            <div class="insight" id="dominantInsight">--</div>
+            <div class="insight" id="flareInsight">--</div>
+            <div class="insight" id="warningInsight">--</div>
+          </section>
+          <aside class="section">
+            <h2 data-i18n="contextTitle">着陆上下文</h2><div class="lead" data-i18n="contextLead">快速还原接地环境和机体状态。</div>
+            <div class="facts" id="facts"></div>
+          </aside>
+        </div>
+
+        <section class="context-detail" id="contextDetails">
+          <article class="viz-card">
+            <h2 class="viz-title" data-i18n="windTitle">相对风向</h2><div class="viz-sub" data-i18n="windSub">飞机固定朝上；蓝色箭头表示气流从哪里吹向飞机。</div>
+            <div id="windGraphic"></div><div class="viz-caption" id="windCaption">--</div>
+          </article>
+          <article class="viz-card">
+            <h2 class="viz-title" data-i18n="poseTitle">接地姿态</h2><div class="viz-sub" data-i18n="poseSub">用简化机体示意横滚和迎角。</div>
+            <div class="pose-grid" id="poseGraphic"></div><div class="viz-caption" data-i18n="poseCaption">快速复盘示意，不代替飞机姿态仪或飞行数据记录器。</div>
+          </article>
+        </section>
+
+        <div class="layout">
+          <section class="section">
+            <h2 data-i18n="chartTitle">100 ft 后多参数轨迹</h2><div class="lead" data-i18n="chartLead">T+ 秒固定为横轴，可同时选择多个聚合参数。相同单位共享量程，不同单位独立缩放；主要日志使用清晰实线，对比日志以同色虚化虚线叠在后方。</div>
+            <div class="chart-tools">
+              <div class="metric-picker" id="metricPicker" role="group" aria-label="选择图表数据源"></div>
+              <div class="chart-style-key">
+                <span class="style-key"><i class="style-line"></i><span data-i18n="chartMain">主要日志</span></span>
+                <span class="style-key"><i class="style-line compare"></i><span data-i18n="chartCompare">对比日志（虚化）</span></span>
+                <span class="chart-scale-note" data-i18n="chartScaleNote">跨单位曲线按各自量程对齐，悬停可查看真实数值</span>
+              </div>
+              <div class="chart-legend" id="chartLegend" hidden></div>
+            </div>
+            <div class="chart-box" id="chartBox"><canvas id="flareChart"></canvas><div class="tooltip" id="chartTip"></div></div>
+          </section>
+          <aside class="section">
+            <h2 data-i18n="diagTitle">测量与载荷诊断</h2><div class="lead" data-i18n="diagLead">v1.1 会显示下降率取值、三链对照与冲量一致性；详细数学日志可提供更多中间量。</div>
+            <table class="diag" id="diagnostics"></table>
+          </aside>
+        </div>
+
+        <details id="rawDetails" open><summary data-i18n="rawSummary">完整原始 TXT</summary><pre id="rawText"></pre></details>
+        <footer data-i18n-html="footerHtml">StarLux LMM 报告阅读器 v2 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。<br>本页面来自Starlux531的<a href="https://github.com/Starlux531/StarLux-Landing-Meter" target="_blank" rel="noopener">项目</a> 由<a href="https://github.com/G4Y8u9" target="_blank" rel="noopener">G4Y8u9</a>修改</footer>
+      </section>
+    </main>
+  </div>
+</div>
+<input id="fileInput" type="file" accept=".txt,text/plain" multiple hidden>
+
+<!-- LMM_LUA_BRIDGE -->
+
+<script>
+"use strict";
+
+const METRIC_PREFERENCE_KEY="starlux-lmm-trajectory-metrics";
+const LANG_KEY="starlux-lmm-lang";
+const I18N={
+  zh:{
+    pageTitle:"StarLux LMM 报告阅读器 v2",
+    brand:"STARLUX 落地指标监视器 · 报告阅读器 v2",
+    privacy:"完全本地读取 · 数据不会上传",
+    langSwitch:"EN",
+    recordsTitle:"已载入记录",
+    selectTxt:"选择 TXT",
+    clear:"清空",
+    sideNote:"点击记录主体切换主要数据；右侧“对比”按钮选择参考数据。关闭页面后自动清空，不会删除原始 TXT。",
+    dropTitle:"把落地日志拖到这里",
+    dropDesc:"无需启动 X-Plane / MSFS。<br> 选择一份或多份 <b>Starlux_Report_*.txt</b>，网页会立即在本机解析评分、载荷、风向、姿态和 100 ft 后拉平轨迹。",
+    chooseLogs:"选择落地日志",
+    chooseLog:"选择落地日志",
+    dropFormats:"支持 StarLux LMM 早期日志及 0.7–1.1 记录 · 可多选",
+    loadMore:"载入更多日志",
+    chooseCompare:"选择对比日志",
+    finalRating:"最终评价",
+    compareTitleLabel:"当前对比数据",
+    swapCompare:"交换主／对比",
+    cancelCompare:"取消对比",
+    cardFpm:"触地下降率",
+    cardFpmHint:"按报告记录的下降率来源显示",
+    cardG:"最终载荷",
+    cardGHint:"沿用原报告最终显示值",
+    cardSpeed:"指示空速 / 地速",
+    cardSpeedHint:"IAS / GS",
+    cardFlare:"拉平曲率",
+    cardFlareHint:"该记录未提供拉平分析",
+    scoreTitle:"评分构成",
+    scoreLead:"按当前日志中的 FPM 与 G 解释评分，不改写原报告结论。",
+    meterFpm:"下降率",
+    meterG:"接地载荷",
+    contextTitle:"着陆上下文",
+    contextLead:"快速还原接地环境和机体状态。",
+    windTitle:"相对风向",
+    windSub:"飞机固定朝上；蓝色箭头表示气流从哪里吹向飞机。",
+    poseTitle:"接地姿态",
+    poseSub:"用简化机体示意横滚和迎角。",
+    poseCaption:"快速复盘示意，不代替飞机姿态仪或飞行数据记录器。",
+    chartTitle:"100 ft 后多参数轨迹",
+    chartLead:"T+ 秒固定为横轴，可同时选择多个聚合参数。相同单位共享量程，不同单位独立缩放；主要日志使用清晰实线，对比日志以同色虚化虚线叠在后方。",
+    chartMain:"主要日志",
+    chartCompare:"对比日志（虚化）",
+    chartScaleNote:"跨单位曲线按各自量程对齐，悬停可查看真实数值",
+    diagTitle:"测量与载荷诊断",
+    diagLead:"v1.1 会显示下降率取值、三链对照与冲量一致性；详细数学日志可提供更多中间量。",
+    rawSummary:"完整原始 TXT",
+    footerHtml:"StarLux LMM 报告阅读器 v2 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。<br>本页面来自Starlux531的<a href=\"https://github.com/Starlux531/StarLux-Landing-Meter\" target=\"_blank\" rel=\"noopener\">项目</a> 由<a href=\"https://github.com/G4Y8u9\" target=\"_blank\" rel=\"noopener\">G4Y8u9</a>修改",
+    recordMeta:"{ts} · {eval}",
+    timeUnknown:"时间未知",
+    recordPrimary:"主数据",
+    recordComparing:"对比中",
+    recordCompare:"对比",
+    compareLineFpm:"对比 {fpm} fpm · {delta}",
+    compareLineG:"对比 {g} G · {delta}",
+    compareLineSpeed:"对比 {ias} / {gs} kt",
+    compareLineFlare:"对比 {v} · {trend}",
+    compareMetricFpm:"触地下降率",
+    compareMetricG:"最终载荷",
+    compareMetricIas:"IAS",
+    compareMetricGs:"GS",
+    compareMetricDuration:"100 ft 至触地",
+    compareMetricFlare:"拉平曲率",
+    mainPrefix:"主要",
+    refPrefix:"对比",
+    mainDelta:"主要 {delta}",
+    deltaUnavailable:"差值不可用",
+    fpmClose:"两者下降率接近",
+    fpmLighter:"主要数据更轻 {n} fpm",
+    fpmHeavier:"主要数据更重 {n} fpm",
+    compareMeta:"{ts} · {eval}",
+    factWind:"相对风",
+    factAoa:"迎角",
+    factRoll:"横滚",
+    factFlareTime:"拉平用时",
+    factRecovery:"净改善量",
+    diagFpmSource:"下降率取值",
+    diagFpmMethod:"下降率取值说明",
+    diagTrajectorySource:"轨迹下降率取值",
+    diagFpmConfidence:"FPM 可信度",
+    diagPhysicalVvi:"物理 / VVI",
+    diagAgl:"AGL 第三链",
+    diagFinalG:"最终 G",
+    diagTouchG:"触地帧 G",
+    diagPeakG:"原始峰值",
+    diagCurveG:"全局 P75",
+    diagRobustG:"稳健事件 G",
+    diagBaselineG:"接地前基线",
+    diagEquivalentG:"冲量等效 / 上限 G",
+    diagGMethod:"最终 G 采用方式",
+    diagConsistency:"一致性误差",
+    diagConfidence:"数据可信度",
+    diagSamples:"有效样本",
+    windNoData:"日志缺少风向或飞机航向，无法绘制可靠的相对风。",
+    noseLabel:"机头方向",
+    windCaption:"风来自 {from}° / {speed} kt；相对机头 {rel}°",
+    noWindData:"无相对风数据",
+    rollView:"横滚（正视）",
+    aoaView:"迎角（侧视）",
+    noRollData:"无横滚数据",
+    noAoaData:"无迎角数据",
+    reportEyebrow:"主要数据 · LANDING REPORT · {ts}",
+    reportTitle:"落地记录 {ts}",
+    noExplanation:"该记录没有提供评价说明。",
+    reportVersion:"报告版本 {v}",
+    fpmNoData:"-- fpm",
+    noFpmSource:"该记录未提供下降率取值说明",
+    flareInsight:"拉平分析：{trend}",
+    flareNoTrend:"该记录未提供拉平轨迹结论",
+    warningInsight:"弹跳状态：{bounce}",
+    notProvided:"未提供",
+    none:"无",
+    legacyNote:"旧版记录保留当时的评分结论，不使用新版阈值重新评级。",
+    dominantNoData:"报告字段不足，无法比较 FPM 与 G 的评分主导关系。",
+    dominantFpm:"FPM 档位更严重，本次评分主要受触地下降率影响。",
+    dominantG:"G 档位更严重，本次评分主要受接地载荷影响。",
+    dominantEqual:"FPM 与 G 处于同一评分档位，结果具有良好的一致性。",
+    statusUnstable:"UNSTABLE 不良落地",
+    statusAttention:"ATTENTION 需注意",
+    statusStable:"STABLE 稳定扎实落地",
+    statusNice:"NICE 轻柔接地",
+    statusUnknown:"未识别评价",
+    zeroFpm:"0 fpm",
+    ra50Compare:"RA 50 ft 对比",
+    ra50Main:"RA 50 ft 主要",
+    hoverMain:"主要 T+{t} s · RA {ra} ft",
+    hoverCompare:"对比 T+{t} s · RA {ra} ft",
+    metricFpm:"轨迹 FPM",
+    metricVvi:"VVI",
+    metricPhysicalFpm:"物理 FPM",
+    metricRa:"RA 高度",
+    metricIas:"IAS",
+    metricGs:"GS",
+    metricPitch:"Pitch",
+    metricAoa:"AoA",
+    metricRoll:"Roll",
+    errNoTxt:"没有找到 TXT 文件。请选择 StarLux LMM 生成的 Starlux_Report_*.txt。",
+    errEmpty:"文件为空",
+    errRead:"无法读取 {name}：",
+    errSameRecord:"主要数据和对比数据不能是同一份记录。",
+    errAutoLoad:"无法自动载入插件选择的日志："
+  },
+  en:{
+    pageTitle:"StarLux LMM Report Reader v2",
+    brand:"STARLUX LANDING METRICS MONITOR · Report Reader v2",
+    privacy:"100% local · nothing is uploaded",
+    langSwitch:"中文",
+    recordsTitle:"Loaded Records",
+    selectTxt:"Select TXT",
+    clear:"Clear",
+    sideNote:"Click a record to make it primary; use “Compare” on the right to pick a reference. Cleared automatically when the page closes — original TXT files are never deleted.",
+    dropTitle:"Drop your landing logs here",
+    dropDesc:"No need to launch X-Plane / MSFS.<br>Pick one or more <b>Starlux_Report_*.txt</b> files — the page instantly parses rating, load, wind, attitude and the flare trajectory after 100 ft, all locally.",
+    chooseLogs:"Choose Landing Logs",
+    chooseLog:"Choose landing log",
+    dropFormats:"Supports StarLux LMM legacy logs & 0.7–1.1 records · multi-select",
+    loadMore:"Load More Logs",
+    chooseCompare:"Choose Compare Log",
+    finalRating:"Final Rating",
+    compareTitleLabel:"Current Comparison",
+    swapCompare:"Swap Main / Compare",
+    cancelCompare:"Cancel Compare",
+    cardFpm:"Touchdown Rate",
+    cardFpmHint:"Shown per the source recorded in the report",
+    cardG:"Final Load",
+    cardGHint:"Uses the report's final displayed value",
+    cardSpeed:"IAS / Ground Speed",
+    cardSpeedHint:"IAS / GS",
+    cardFlare:"Flare Curvature",
+    cardFlareHint:"No flare analysis in this record",
+    scoreTitle:"Rating Breakdown",
+    scoreLead:"Explains the rating from the log's FPM and G, without rewriting the report's conclusion.",
+    meterFpm:"Sink Rate",
+    meterG:"Landing Load",
+    contextTitle:"Landing Context",
+    contextLead:"Quick snapshot of the touchdown environment and aircraft attitude.",
+    windTitle:"Relative Wind",
+    windSub:"Aircraft faces up; the blue arrow shows where the wind blows from.",
+    poseTitle:"Touchdown Attitude",
+    poseSub:"Simplified airframe showing roll and angle of attack.",
+    poseCaption:"Quick visual only — not a substitute for the attitude indicator or FDR.",
+    chartTitle:"Multi-parameter Trajectory after 100 ft",
+    chartLead:"T+ seconds is the fixed X axis; select multiple aggregate parameters. Same units share a scale, different units scale independently; primary logs use solid lines, compare logs are layered behind as faded dashed lines.",
+    chartMain:"Primary",
+    chartCompare:"Compare (faded)",
+    chartScaleNote:"Cross-unit curves are aligned per scale; hover to see real values",
+    diagTitle:"Measurement & Load Diagnostics",
+    diagLead:"v1.1 shows FPM source, three-chain comparison and impulse consistency; the detailed math log exposes more intermediates.",
+    rawSummary:"Full Raw TXT",
+    footerHtml:"StarLux LMM Report Reader v2 · files are read only by this browser page<br>For flight-sim debrief only — not a substitute for airline, maintenance or airworthiness determinations.<br>Page based on Starlux531's <a href=\"https://github.com/Starlux531/StarLux-Landing-Meter\" target=\"_blank\" rel=\"noopener\">project</a> — modified by <a href=\"https://github.com/G4Y8u9\" target=\"_blank\" rel=\"noopener\">G4Y8u9</a>",
+    recordMeta:"{ts} · {eval}",
+    timeUnknown:"unknown time",
+    recordPrimary:"Primary",
+    recordComparing:"Comparing",
+    recordCompare:"Compare",
+    compareLineFpm:"Compare {fpm} fpm · {delta}",
+    compareLineG:"Compare {g} G · {delta}",
+    compareLineSpeed:"Compare {ias} / {gs} kt",
+    compareLineFlare:"Compare {v} · {trend}",
+    compareMetricFpm:"Touchdown rate",
+    compareMetricG:"Final load",
+    compareMetricIas:"IAS",
+    compareMetricGs:"GS",
+    compareMetricDuration:"100 ft to touchdown",
+    compareMetricFlare:"Flare curvature",
+    mainPrefix:"Main",
+    refPrefix:"Compare",
+    mainDelta:"Main {delta}",
+    deltaUnavailable:"Delta unavailable",
+    fpmClose:"Sink rates are close",
+    fpmLighter:"Primary is lighter by {n} fpm",
+    fpmHeavier:"Primary is heavier by {n} fpm",
+    compareMeta:"{ts} · {eval}",
+    factWind:"Relative wind",
+    factAoa:"Angle of attack",
+    factRoll:"Roll",
+    factFlareTime:"Flare duration",
+    factRecovery:"Net recovery",
+    diagFpmSource:"FPM source",
+    diagFpmMethod:"FPM source note",
+    diagTrajectorySource:"Trajectory FPM source",
+    diagFpmConfidence:"FPM confidence",
+    diagPhysicalVvi:"Physical / VVI",
+    diagAgl:"AGL third chain",
+    diagFinalG:"Final G",
+    diagTouchG:"Touchdown G",
+    diagPeakG:"Raw peak",
+    diagCurveG:"Global P75",
+    diagRobustG:"Robust event G",
+    diagBaselineG:"Pre-touch baseline",
+    diagEquivalentG:"Impulse equivalent / cap G",
+    diagGMethod:"Final G method",
+    diagConsistency:"Consistency error",
+    diagConfidence:"Confidence",
+    diagSamples:"Valid samples",
+    windNoData:"Missing wind or heading in the log — cannot draw reliable relative wind.",
+    noseLabel:"NOSE",
+    windCaption:"Wind from {from}° / {speed} kt; {rel}° relative to nose",
+    noWindData:"No relative wind data",
+    rollView:"Roll (front)",
+    aoaView:"AoA (side)",
+    noRollData:"No roll data",
+    noAoaData:"No AoA data",
+    reportEyebrow:"PRIMARY · LANDING REPORT · {ts}",
+    reportTitle:"Landing Record {ts}",
+    noExplanation:"No explanation provided in this record.",
+    reportVersion:"Report version {v}",
+    fpmNoData:"-- fpm",
+    noFpmSource:"No FPM source note in this record",
+    flareInsight:"Flare analysis: {trend}",
+    flareNoTrend:"No flare trajectory conclusion in this record",
+    warningInsight:"Bounce: {bounce}",
+    notProvided:"not provided",
+    none:"none",
+    legacyNote:"Legacy record keeps its original conclusion; new thresholds are not applied.",
+    dominantNoData:"Insufficient fields to compare which drives the rating.",
+    dominantFpm:"The FPM tier is more severe; the rating is driven mainly by touchdown rate.",
+    dominantG:"The G tier is more severe; the rating is driven mainly by landing load.",
+    dominantEqual:"FPM and G are in the same tier — consistent result.",
+    statusUnstable:"UNSTABLE Poor landing",
+    statusAttention:"ATTENTION Needs attention",
+    statusStable:"STABLE Solid landing",
+    statusNice:"NICE Gentle touchdown",
+    statusUnknown:"Unknown rating",
+    zeroFpm:"0 fpm",
+    ra50Compare:"Compare RA 50 ft",
+    ra50Main:"Main RA 50 ft",
+    hoverMain:"Main T+{t} s · RA {ra} ft",
+    hoverCompare:"Compare T+{t} s · RA {ra} ft",
+    metricFpm:"Track FPM",
+    metricVvi:"VVI",
+    metricPhysicalFpm:"Physical FPM",
+    metricRa:"RA Height",
+    metricIas:"IAS",
+    metricGs:"GS",
+    metricPitch:"Pitch",
+    metricAoa:"AoA",
+    metricRoll:"Roll",
+    errNoTxt:"No TXT files found. Please choose Starlux_Report_*.txt generated by StarLux LMM.",
+    errEmpty:"File is empty",
+    errRead:"Cannot read {name}: ",
+    errSameRecord:"Primary and compare data cannot be the same record.",
+    errAutoLoad:"Could not auto-load the log chosen by the add-on: "
+  }
+};
+let currentLang=(function(){try{return localStorage.getItem(LANG_KEY)==="en"?"en":"zh"}catch{return"zh"}})();
+function t(key,vars){
+  const text=(I18N[currentLang]&&I18N[currentLang][key]!==undefined)?I18N[currentLang][key]:(I18N.zh[key]!==undefined?I18N.zh[key]:key);
+  if(vars){let out=text;for(const k in vars)out=out.replaceAll("{"+k+"}",String(vars[k]));return out}
+  return text
+}
+
+// 报告文件本身是中文（由 starlux_LMM_pyver.py 生成）。英文界面下用 rt()
+// 把报告内嵌的中文取值实时翻译成英文；中文界面原样返回。
+const STATUS_TRANSLATION={
+  "UNSTABLE 不良落地":"UNSTABLE Poor landing",
+  "ATTENTION 需注意":"ATTENTION Needs attention",
+  "STABLE 稳定扎实落地":"STABLE Solid landing",
+  "NICE 轻柔接地":"NICE Gentle touchdown"
+};
+const REPORT_TEXT_TRANSLATION={
+  // 弹跳检测
+  "发生弹跳":"Bounce detected",
+  "未检测到弹跳":"No bounce detected",
+  // 拉平轨迹结论
+  "下降率轨迹震荡高":"High sink-rate oscillation",
+  "下降率轨迹正常":"Normal sink-rate trajectory",
+  "拉平轨迹样本不足":"Insufficient flare trajectory samples",
+  "拉平轨迹聚合点不足":"Insufficient flare aggregation points",
+  // 下降率取值（FPM 来源）
+  "物理轨迹（三项终端测量一致）":"Physical trajectory (all three terminal measurements agree)",
+  "垂直速度 VVI（终端链路差异时自动采用）":"Vertical speed VVI (auto-selected when terminal chains differ)",
+  "垂直速度 VVI":"Vertical speed VVI",
+  // 下降率取值说明
+  "三项终端测量结果一致，采用物理轨迹下降率":"All three terminal measurements agree; physical trajectory rate used",
+  "终端测量出现差异，VVI与几何轨迹相互接近，采用VVI下降率":"Terminal measurements differ; VVI and geometry agree, VVI rate used",
+  "终端测量结果分散，采用VVI下降率并保留全部对照值":"Terminal measurements scattered; VVI rate used, all reference values kept",
+  "终端测量样本不足，采用VVI下降率并保留全部对照值":"Insufficient terminal samples; VVI rate used, all reference values kept",
+  "终端测量样本不足且无有效VVI，采用触地前快照":"Insufficient terminal samples and no valid VVI; pre-touch snapshot used",
+  // 最终 G 采用方式
+  "物理样本不足，使用备用一致性上限":"Insufficient physical samples; fallback consistency cap used",
+  "高可信冲量，采用第75百分位曲线G":"High-confidence impulse; 75th percentile curve G used",
+  "中可信冲量，采用全局P75与160ms局部冲击包络的较大值":"Medium-confidence impulse; larger of global P75 and 160 ms local envelope G",
+  "中可信冲量，局部包络样本不足，采用全局第75百分位曲线G":"Medium-confidence impulse; local envelope insufficient, global 75th percentile curve G used",
+  "低可信峰值，主要采用冲量等效G":"Low-confidence peak; impulse-equivalent G dominates",
+  "长行程压缩达到采集上限，采用全局P75与160ms局部冲击包络的较大值":"Long-travel compression reached capture cap; larger of global P75 and local envelope G",
+  "长行程压缩达到采集上限，局部包络样本不足，采用全局第75百分位曲线G":"Long-travel compression reached capture cap; local envelope insufficient, global 75th percentile curve G used",
+  // 数据可信度
+  "高":"High","中":"Medium","低":"Low",
+  // 相对风六类
+  "顶风":"headwind","顺风":"tailwind",
+  "左前侧风":"left quartering headwind","右前侧风":"right quartering headwind",
+  "左后侧风":"left quartering tailwind","右后侧风":"right quartering tailwind",
+  // 横滚
+  "水平（0.0 deg）":"Level (0.0 deg)",
+  // 评价说明整句
+  "发生弹跳，且至少一次稳健过载超过 1.80 G":"Bounce detected, with at least one robust load above 1.80 G",
+  "不良落地：FPM 或 G 超出 Attention 上限。":"Poor landing: FPM or G exceeds the Attention limit.",
+  "需注意：FPM 或 G 达到 Attention 等级。":"Attention: FPM or G reaches the Attention tier.",
+  "稳定扎实落地：落地平稳但仍有改进空间。":"Solid landing: smooth touchdown but room for improvement.",
+  "轻柔接地：下降率和过载都在 Nice 范围内。":"Gentle touchdown: sink rate and load are within the Nice range."
+};
+function rt(value){
+  // 仅在英文界面翻译报告内嵌的中文文本；中文界面原样返回。
+  if(currentLang!=="en"||value==null||value==="")return value;
+  const text=String(value);
+  if(Object.hasOwn(REPORT_TEXT_TRANSLATION,text))return REPORT_TEXT_TRANSLATION[text];
+  // 弹跳降级说明："发生弹跳：评级由 X 降级为 Y"
+  let match=text.match(/^发生弹跳：评级由 (.+?) 降级为 (.+)$/);
+  if(match)return`Bounce: rating downgraded from ${STATUS_TRANSLATION[match[1]]||match[1]} to ${STATUS_TRANSLATION[match[2]]||match[2]}`;
+  // 相对风："风 230/12kt 左前侧风" 或 "风 --"
+  if(text==="风 --")return"Wind --";
+  match=text.match(/^风\s*(\d{3})\/([\d.]+)kt\s*(.*)$/);
+  if(match)return`Wind ${match[1]}°/${match[2]}kt ${REPORT_TEXT_TRANSLATION[match[3]]||match[3]}`;
+  // 横滚："左倾 2.5 deg" / "右倾 2.5 deg"
+  match=text.match(/^(左倾|右倾)\s*([\d.]+)\s*deg$/);
+  if(match)return`${match[1]==="左倾"?"Left bank":"Right bank"} ${match[2]} deg`;
+  return value;
+}
+
+const TRAJECTORY_METRICS=[
+  {key:"fpm",labelKey:"metricFpm",unit:"fpm",group:"verticalSpeed",color:"#0066FF",decimals:0},
+  {key:"vvi",labelKey:"metricVvi",unit:"fpm",group:"verticalSpeed",color:"#FF9F0A",decimals:0},
+  {key:"physicalFpm",labelKey:"metricPhysicalFpm",unit:"fpm",group:"verticalSpeed",color:"#7C3AED",decimals:0},
+  {key:"ra",labelKey:"metricRa",unit:"ft",group:"altitude",color:"#0FA3A3",decimals:1},
+  {key:"ias",labelKey:"metricIas",unit:"kt",group:"speed",color:"#16A34A",decimals:0},
+  {key:"gs",labelKey:"metricGs",unit:"kt",group:"speed",color:"#84CC16",decimals:0},
+  {key:"pitch",labelKey:"metricPitch",unit:"°",group:"attitude",color:"#F59E0B",decimals:1},
+  {key:"aoa",labelKey:"metricAoa",unit:"°",group:"attitude",color:"#EC4899",decimals:1},
+  {key:"roll",labelKey:"metricRoll",unit:"°",group:"attitude",color:"#EF4444",decimals:1}
+];
+const metricByKey=Object.fromEntries(TRAJECTORY_METRICS.map(metric=>[metric.key,metric]));
+let savedMetricKeys=["fpm"];
+try{
+  const saved=JSON.parse(localStorage.getItem(METRIC_PREFERENCE_KEY)||"null");
+  if(Array.isArray(saved))savedMetricKeys=saved
+}catch{}
+savedMetricKeys=[...new Set(savedMetricKeys.filter(key=>metricByKey[key]))];
+if(!savedMetricKeys.length)savedMetricKeys=["fpm"];
+const state={records:[],activeId:null,compareId:null,importMode:"main",selectedMetrics:savedMetricKeys};
+const $=id=>document.getElementById(id);
+const ui={
+  fileInput:$("fileInput"),drop:$("dropZone"),report:$("report"),error:$("errorBox"),
+  list:$("recordList"),count:$("recordCount"),canvas:$("flareChart"),tip:$("chartTip"),
+  comparePanel:$("comparePanel"),chartLegend:$("chartLegend"),metricPicker:$("metricPicker")
+};
+
+function showError(message){
+  ui.error.textContent=message;ui.error.style.display=message?"block":"none";
+}
+function anyNumber(value){
+  const match=String(value??"").match(/[+-]?\d+(?:\.\d+)?/);
+  return match?Number(match[0]):null;
+}
+function parseNumber(value){
+  const text=String(value??"").trim();
+  const match=text.match(/^[+-]?\d+(?:\.\d+)?/);
+  return match?Number(match[0]):null;
+}
+function clamp(value,min,max){return Math.max(min,Math.min(max,value))}
+function normalizeDeg(value){return ((value%360)+360)%360}
+function relativeAngle(from,heading){
+  let value=normalizeDeg(from-heading);if(value>180)value-=360;return value
+}
+function fieldMap(content){
+  const fields={};
+  content.split(/\r?\n/).forEach(line=>{
+    const match=line.match(/^\s*(.*?)\s*[:：]\s*(.*?)\s*$/);
+    if(match&&match[1]&&!Object.hasOwn(fields,match[1]))fields[match[1]]=match[2];
+  });
+  return fields
+}
+function firstField(fields,names){
+  for(const name of names){if(fields[name]!=null&&fields[name]!=="")return fields[name]}
+  return ""
+}
+function statusCode(value){
+  const upper=String(value??"").toUpperCase();
+  if(upper.includes("UNSTABLE"))return"UNSTABLE";
+  if(upper.includes("ATTENTION"))return"ATTENTION";
+  if(upper.includes("STABLE"))return"STABLE";
+  if(upper.includes("NICE"))return"NICE";
+  return"UNKNOWN"
+}
+function statusVisual(status){
+  const map={
+    UNSTABLE:["#E11D48","statusUnstable"],
+    ATTENTION:["#F59E0B","statusAttention"],
+    STABLE:["#16A34A","statusStable"],
+    NICE:["#2563EB","statusNice"],
+    UNKNOWN:["#596773","statusUnknown"]
+  };
+  const item=map[status]||map.UNKNOWN;
+  return [item[0],t(item[1])]
+}
+function parseRoll(value){
+  const number=anyNumber(value);if(number==null)return null;
+  if(String(value).includes("左倾"))return-Math.abs(number);
+  if(String(value).includes("右倾"))return Math.abs(number);
+  return number
+}
+function parseTrajectory(content){
+  const points=[];let inTable=false,dataStarted=false;
+  for(const line of content.split(/\r?\n/)){
+    if(line.includes("0.5秒聚合轨迹表")){inTable=true;continue}
+    if(!inTable)continue;
+    const values=[...line.matchAll(/[+-]?\d+(?:\.\d+)?/g)].map(m=>Number(m[0]));
+    if(values.length>=3){
+      points.push({t:values[0],ra:values[1],fpm:values[2],vvi:values[3]??null,ias:values[4]??null,gs:values[5]??null,pitch:values[6]??null,aoa:values[7]??null,roll:values[8]??null,physicalFpm:values[9]??null});
+      dataStarted=true
+    }else if(dataStarted)break
+  }
+  return points
+}
+function filenameIdentity(name){
+  const match=name.match(/^LMM_([^_]+)_([^_]+)_RWY([^_]+)_/);
+  return match?{airport:match[1],aircraft:match[2],runway:match[3]}:{airport:"",aircraft:"",runway:""}
+}
+function parseReport(fileName,content){
+  content=content.replace(/^\uFEFF/,"");
+  const fields=fieldMap(content),identity=filenameIdentity(fileName);
+  const evaluation=firstField(fields,["最终评价","落地评价"]);
+  const fpmText=firstField(fields,["触地垂直速度","触地下降率"]);
+  const gText=firstField(fields,["最终过载","最终显示和评分值"]);
+  const iasGs=firstField(fields,["IAS / GS"]);
+  let ias=parseNumber(firstField(fields,["指示空速（IAS）"]));
+  let gs=parseNumber(firstField(fields,["地速（GS）"]));
+  const speedPair=iasGs.match(/([+-]?\d+(?:\.\d+)?)\s*\/\s*([+-]?\d+(?:\.\d+)?)/);
+  if(speedPair){ias=Number(speedPair[1]);gs=Number(speedPair[2])}
+  const airportText=firstField(fields,["落地机场"]);
+  let airport=(airportText.match(/^([\w]+)/)||[])[1]||identity.airport||"UNKNOWN";
+  if(airportText.includes("未能识别"))airport="UNKNOWN";
+  const aircraft=firstField(fields,["机型（ICAO）"])||identity.aircraft||"UNKNOWN";
+  const runwayText=firstField(fields,["触地跑道方向"]);
+  const runway=(runwayText.match(/RWY([\w]+)/i)||[])[1]||runwayText.match(/(?:约\s*)?([\d]{1,2}[LRC]?)/i)?.[1]||identity.runway||"--";
+  const headingText=firstField(fields,["飞机磁航向"]);
+  const windSourceText=firstField(fields,["风向和风速"]);
+  const windMatch=windSourceText.match(/来自\s*([+-]?\d+(?:\.\d+)?)\s*deg[^\d]+([+-]?\d+(?:\.\d+)?)\s*kt/i);
+  const aoaText=firstField(fields,["迎角"]),rollText=firstField(fields,["横滚角"]);
+  const version=(content.match(/StarLux[^\r\n]*?v(\d+\.\d+(?:\.\d+)?)/)||[])[1]||"Legacy";
+  return{
+    fileName,raw:content,fields,version,legacy:version==="Legacy",
+    timestamp:firstField(fields,["落地时间（本地时间）"]),
+    evaluation:evaluation||"未提供",explanation:firstField(fields,["评价说明"]),status:statusCode(evaluation),
+    fpm:parseNumber(fpmText),fpmText:fpmText||"无数据",g:parseNumber(gText),gText:gText||"无数据",
+    fpmSource:firstField(fields,["下降率取值","FPM采用来源"]),fpmConfidence:firstField(fields,["FPM数据可信度"]),
+    fpmMethod:firstField(fields,["下降率取值说明","FPM采用方式"]),trajectorySource:firstField(fields,["轨迹下降率取值","轨迹FPM数据源"]),
+    physicalFpm:firstField(fields,["250 ms 物理速度第25百分位"]),
+    vviFpm:firstField(fields,["同窗 VVI 中位数"]),aglFpm:firstField(fields,["第三链 AGL 高度变化下降率"]),
+    airport,airportText:airportText||airport,aircraft,runway,ias,gs,
+    tasText:firstField(fields,["真空速（TAS）"]),aoaText,aoaDeg:parseNumber(aoaText),
+    rollText,rollDeg:parseRoll(rollText),headingText,headingDeg:parseNumber(headingText),
+    windText:firstField(fields,["相对风"]),windSourceText,
+    windFromDeg:windMatch?Number(windMatch[1]):null,windSpeedKts:windMatch?Number(windMatch[2]):null,
+    airportDistanceText:firstField(fields,["触地点距机场参考点"]),
+    runwayLengthM:parseNumber(firstField(fields,["跑道长度","跑道可用长度"])),
+    touchdownFromThresholdM:parseNumber(firstField(fields,["触地点距跑道入口","触地点距入口"])),
+    surfaceText:firstField(fields,["道面提示"]),surfaceSource:firstField(fields,["道面判定来源"]),
+    bounceText:firstField(fields,["弹跳检测"]),flareMetric:parseNumber(firstField(fields,["拉平曲率"])),
+    flareTrend:firstField(fields,["拉平轨迹结论","轨迹结论"]),
+    flareDuration:firstField(fields,["100 ft 至触地时间"]),
+    flareEntry:firstField(fields,["100 ft 附近下降率"]),
+    flareRecovery:firstField(fields,["下降率净改善量"]),
+    touchG:parseNumber(firstField(fields,["触地帧过载"])),
+    peakG:parseNumber(firstField(fields,["第一次压缩原始峰值","短窗口原始峰值"])),
+    curveG:parseNumber(firstField(fields,["第75百分位曲线 G","稳健采样值"])),
+    localEventG:parseNumber(firstField(fields,["160 ms 局部冲击包络 G"])),
+    robustEventG:parseNumber(firstField(fields,["中可信度稳健冲击 G"])),
+    gMethod:firstField(fields,["最终 G 采用方式"]),
+    baselineG:parseNumber(firstField(fields,["接地前垂直 G 基线"])),
+    equivalentG:parseNumber(firstField(fields,["冲量等效 G","FPM/G 一致性上限"])),
+    consistencyText:firstField(fields,["冲量一致性误差"]),
+    confidenceText:firstField(fields,["数据可信度"]),
+    impactSamples:firstField(fields,["冲击阶段有效样本数"]),
+    analysisMs:firstField(fields,["落地分析耗时","最终评分耗时","冲量分析耗时"]),
+    trajectory:parseTrajectory(content)
+  }
+}
+function decodeLog(buffer){
+  const utf8=new TextDecoder("utf-8",{fatal:false}).decode(buffer);
+  const bad=(utf8.match(/\uFFFD/g)||[]).length;
+  if(bad<3)return utf8;
+  try{
+    const gb=new TextDecoder("gb18030",{fatal:false}).decode(buffer);
+    return (gb.match(/\uFFFD/g)||[]).length<bad?gb:utf8
+  }catch{return utf8}
+}
+function recordSortKey(record){
+  const normalized=String(record.report.timestamp||"")
+    .replace(/[^\d]/g,"")
+    .padEnd(14,"0")
+    .slice(0,14);
+  const parsed=Number(normalized);
+  return parsed>0?parsed:record.file.lastModified
+}
+async function importFiles(fileList,mode=state.importMode){
+  const files=[...fileList].filter(file=>file.name.toLowerCase().endsWith(".txt"));
+  if(!files.length){showError(t("errNoTxt"));return}
+  showError("");
+  const importedIds=[];
+  for(const file of files){
+    try{
+      const content=decodeLog(await file.arrayBuffer());
+      if(!content.trim())throw new Error(t("errEmpty"));
+      const report=parseReport(file.name,content);
+      const id=`${file.name}:${file.size}:${file.lastModified}`;
+      const existing=state.records.findIndex(item=>item.id===id);
+      const record={id,file,report};
+      if(existing>=0)state.records[existing]=record;else state.records.push(record);
+      importedIds.push(id)
+    }catch(error){showError(t("errRead",{name:file.name})+`${error.message||error}`)}
+  }
+  state.records.sort((a,b)=>recordSortKey(b)-recordSortKey(a));
+  if(importedIds.length){
+    const selected=importedIds.at(-1);
+    if(mode==="compare"&&state.activeId){
+      if(selected===state.activeId)showError(t("errSameRecord"));
+      else state.compareId=selected
+    }else{
+      state.activeId=selected;
+      if(state.compareId===selected)state.compareId=null
+    }
+    renderCurrent()
+  }
+  state.importMode="main";ui.fileInput.multiple=true
+}
+function renderRecordList(){
+  ui.list.replaceChildren();ui.count.textContent=String(state.records.length);
+  for(const record of state.records){
+    const wrap=document.createElement("div");wrap.className="record-wrap";
+    const button=document.createElement("button");button.type="button";
+    button.className="record"+(record.id===state.activeId?" active":"")+(record.id===state.compareId?" compare":"");
+    const title=document.createElement("strong");title.textContent=record.file.name;
+    const meta=document.createElement("span");
+    meta.textContent=t("recordMeta",{ts:record.report.timestamp||t("timeUnknown"),eval:statusVisual(record.report.status)[1]});
+    button.append(title,meta);button.addEventListener("click",()=>selectRecord(record.id));
+    const compareButton=document.createElement("button");compareButton.type="button";
+    compareButton.className="compare-action"+(record.id===state.compareId?" selected":"");
+    compareButton.disabled=record.id===state.activeId;
+    compareButton.textContent=record.id===state.activeId?t("recordPrimary"):record.id===state.compareId?t("recordComparing"):t("recordCompare");
+    compareButton.addEventListener("click",()=>setComparison(record.id));
+    wrap.append(button,compareButton);ui.list.append(wrap)
+  }
+}
+function renderCurrent(){
+  const primary=activeRecord();
+  renderRecordList();
+  if(!primary){ui.report.hidden=true;ui.drop.hidden=false;return}
+  ui.drop.hidden=true;ui.report.hidden=false;renderReport(primary.report,comparisonRecord()?.report||null)
+}
+function selectRecord(id){
+  const record=state.records.find(item=>item.id===id);if(!record)return;
+  if(id===state.compareId){
+    const previous=state.activeId;state.activeId=id;state.compareId=previous
+  }else state.activeId=id;
+  showError("");renderCurrent();window.scrollTo({top:0,behavior:"smooth"})
+}
+function setComparison(id){
+  if(id===state.activeId){showError(t("errSameRecord"));return}
+  state.compareId=id;showError("");renderCurrent()
+}
+function cancelComparison(){state.compareId=null;showError("");renderCurrent()}
+function swapComparison(){
+  if(!state.compareId)return;
+  const previous=state.activeId;state.activeId=state.compareId;state.compareId=previous;showError("");renderCurrent()
+}
+function fmt(value,digits=0,suffix=""){
+  return Number.isFinite(value)?`${value.toFixed(digits)}${suffix}`:"--"
+}
+function meterPercent(value,min,max){return Number.isFinite(value)?clamp((value-min)/(max-min)*100,0,100):0}
+function severityFpm(value){
+  if(!Number.isFinite(value))return 0;value=Math.abs(value);return value<=100?1:value<=250?2:value<=300?3:4
+}
+function severityG(value){
+  if(!Number.isFinite(value))return 0;return value<=1.2?1:value<=1.5?2:value<=1.8?3:4
+}
+function dominantText(report){
+  if(report.legacy)return t("legacyNote");
+  const f=severityFpm(report.fpm),g=severityG(report.g);
+  if(!f||!g)return t("dominantNoData");
+  if(f>g)return t("dominantFpm");
+  if(g>f)return t("dominantG");
+  return t("dominantEqual")
+}
+function setText(id,value){$(id).textContent=value}
+function parseMetric(value){return parseNumber(String(value||""))}
+function signedDelta(primary,comparison,digits,unit){
+  if(!Number.isFinite(primary)||!Number.isFinite(comparison))return t("deltaUnavailable");
+  const delta=primary-comparison;
+  return t("mainDelta",{delta:`${delta>=0?"+":""}${delta.toFixed(digits)}${unit}`})
+}
+function fpmDelta(primary,comparison){
+  if(!Number.isFinite(primary)||!Number.isFinite(comparison))return t("deltaUnavailable");
+  const delta=Math.abs(primary)-Math.abs(comparison);
+  if(Math.abs(delta)<.5)return t("fpmClose");
+  const amount=Math.abs(Math.round(delta));
+  return delta<0?t("fpmLighter",{n:amount}):t("fpmHeavier",{n:amount})
+}
+function setCompareLine(id,text,visible){
+  const node=$(id);node.hidden=!visible;node.textContent=visible?text:""
+}
+function addCompareMetric(root,label,primary,comparison,delta){
+  const item=document.createElement("div");item.className="compare-metric";
+  const heading=document.createElement("span");heading.className="metric-label";heading.textContent=label;
+  const values=document.createElement("div");values.className="compare-values";
+  const main=document.createElement("b");main.textContent=`${t("mainPrefix")} ${primary}`;
+  const reference=document.createElement("span");reference.textContent=`${t("refPrefix")} ${comparison}`;
+  const deltaNode=document.createElement("div");deltaNode.className="compare-delta";deltaNode.textContent=delta;
+  values.append(main,reference);item.append(heading,values,deltaNode);root.append(item)
+}
+function renderComparison(primary,comparison){
+  const visible=Boolean(comparison);ui.comparePanel.hidden=!visible;
+  setCompareLine("fpmCompareLine",visible&&Number.isFinite(comparison.fpm)?t("compareLineFpm",{fpm:Math.round(comparison.fpm),delta:fpmDelta(primary.fpm,comparison.fpm)}):"",visible);
+  setCompareLine("gCompareLine",visible&&Number.isFinite(comparison.g)?t("compareLineG",{g:comparison.g.toFixed(2),delta:signedDelta(primary.g,comparison.g,2," G")}):"",visible);
+  setCompareLine("speedCompareLine",visible?t("compareLineSpeed",{ias:Number.isFinite(comparison.ias)?Math.round(comparison.ias):"--",gs:Number.isFinite(comparison.gs)?Math.round(comparison.gs):"--"}):"",visible);
+  setCompareLine("flareCompareLine",visible?t("compareLineFlare",{v:Number.isFinite(comparison.flareMetric)?comparison.flareMetric.toFixed(1):"--",trend:rt(comparison.flareTrend)||"—"}):"",visible);
+  if(!visible)return;
+  setText("compareTitle",comparison.timestamp||comparison.fileName);
+  setText("compareMeta",t("compareMeta",{ts:comparison.timestamp||comparison.fileName,eval:statusVisual(comparison.status)[1]}));
+  const root=$("compareMetrics");root.replaceChildren();
+  addCompareMetric(root,t("compareMetricFpm"),Number.isFinite(primary.fpm)?`${Math.round(primary.fpm)} fpm`:"--",Number.isFinite(comparison.fpm)?`${Math.round(comparison.fpm)} fpm`:"--",fpmDelta(primary.fpm,comparison.fpm));
+  addCompareMetric(root,t("compareMetricG"),fmt(primary.g,2," G"),fmt(comparison.g,2," G"),signedDelta(primary.g,comparison.g,2," G"));
+  addCompareMetric(root,t("compareMetricIas"),fmt(primary.ias,0," kt"),fmt(comparison.ias,0," kt"),signedDelta(primary.ias,comparison.ias,0," kt"));
+  addCompareMetric(root,t("compareMetricGs"),fmt(primary.gs,0," kt"),fmt(comparison.gs,0," kt"),signedDelta(primary.gs,comparison.gs,0," kt"));
+  const primaryDuration=parseMetric(primary.flareDuration),compareDuration=parseMetric(comparison.flareDuration);
+  addCompareMetric(root,t("compareMetricDuration"),Number.isFinite(primaryDuration)?`${primaryDuration.toFixed(2)} s`:"--",Number.isFinite(compareDuration)?`${compareDuration.toFixed(2)} s`:"--",signedDelta(primaryDuration,compareDuration,2," s"));
+  addCompareMetric(root,t("compareMetricFlare"),fmt(primary.flareMetric,1,""),fmt(comparison.flareMetric,1,""),signedDelta(primary.flareMetric,comparison.flareMetric,1,""));
+}
+function renderFacts(report){
+  const facts=[
+    [t("factWind"),rt(report.windText)||"--"],[t("factAoa"),rt(report.aoaText)||"--"],
+    [t("factRoll"),rt(report.rollText)||"--"],[t("factFlareTime"),report.flareDuration||"--"],[t("factRecovery"),report.flareRecovery||"--"]
+  ];
+  const root=$("facts");root.replaceChildren();
+  for(const [label,value] of facts){
+    const div=document.createElement("div");div.className="fact";
+    const span=document.createElement("span");span.textContent=label;
+    const strong=document.createElement("b");strong.textContent=value||"--";
+    div.append(span,strong);root.append(div)
+  }
+}
+function renderDiagnostics(report){
+  const rows=[
+    [t("diagFpmSource"),rt(report.fpmSource)||"--"],[t("diagFpmMethod"),rt(report.fpmMethod)||"--"],
+    [t("diagTrajectorySource"),rt(report.trajectorySource||report.fpmSource)||"--"],[t("diagFpmConfidence"),rt(report.fpmConfidence)||"--"],
+    [t("diagPhysicalVvi"),`${report.physicalFpm||"--"} / ${report.vviFpm||"--"}`],[t("diagAgl"),report.aglFpm||"--"],
+    [t("diagFinalG"),fmt(report.g,3," G")],[t("diagTouchG"),fmt(report.touchG,3," G")],
+    [t("diagPeakG"),fmt(report.peakG,3," G")],[t("diagCurveG"),fmt(report.curveG,3," G")],
+    [t("diagRobustG"),fmt(report.robustEventG,3," G")],
+    [t("diagBaselineG"),fmt(report.baselineG,3," G")],[t("diagEquivalentG"),fmt(report.equivalentG,3," G")],
+    [t("diagGMethod"),rt(report.gMethod)||"--"],
+    [t("diagConsistency"),report.consistencyText||"--"],[t("diagConfidence"),rt(report.confidenceText)||"--"],
+    [t("diagSamples"),report.impactSamples||"--"]
+  ];
+  const table=$("diagnostics");table.replaceChildren();
+  for(const [label,value] of rows){
+    const tr=document.createElement("tr"),a=document.createElement("td"),b=document.createElement("td");
+    a.textContent=label;b.textContent=value;tr.append(a,b);table.append(tr)
+  }
+}
+function renderWind(report){
+  const root=$("windGraphic");root.replaceChildren();
+  if(!Number.isFinite(report.windFromDeg)||!Number.isFinite(report.headingDeg)){
+    const empty=document.createElement("div");empty.className="wind-board geometry-empty";empty.textContent=t("windNoData");
+    root.append(empty);setText("windCaption",rt(report.windText)||t("noWindData"));return
+  }
+  const angle=relativeAngle(report.windFromDeg,report.headingDeg);
+  const board=document.createElement("div");board.className="wind-board";
+  const nose=document.createElement("span");nose.className="nose-label";nose.textContent=t("noseLabel");
+  const plane=document.createElement("span");plane.className="plane-top";plane.textContent="✈";
+  const arrow=document.createElement("i");arrow.className="wind-arrow";arrow.style.transform=`rotate(${angle}deg)`;
+  board.append(nose,plane,arrow);root.append(board);
+  setText("windCaption",t("windCaption",{from:String(Math.round(normalizeDeg(report.windFromDeg))).padStart(3,"0"),speed:Math.round(report.windSpeedKts||0),rel:`${angle>=0?"+":""}${Math.round(angle)}`}))
+}
+function renderPose(report){
+  const root=$("poseGraphic");root.replaceChildren();
+  const roll=document.createElement("div");roll.className="pose-mini";
+  const rollTitle=document.createElement("b");rollTitle.textContent=t("rollView");
+  const rollBoard=document.createElement("div");rollBoard.className="pose-board";
+  if(Number.isFinite(report.rollDeg)){
+    const horizon=document.createElement("i");horizon.className="horizon";
+    const plane=document.createElement("i");plane.className="plane-front";plane.style.transform=`translate(-50%,-50%) rotate(${report.rollDeg}deg)`;
+    rollBoard.append(horizon,plane)
+  }else{rollBoard.classList.add("geometry-empty");rollBoard.textContent=t("noRollData")}
+  const rollCaption=document.createElement("div");rollCaption.className="viz-caption";rollCaption.textContent=rt(report.rollText)||"--";
+  roll.append(rollTitle,rollBoard,rollCaption);
+  const aoa=document.createElement("div");aoa.className="pose-mini";
+  const aoaTitle=document.createElement("b");aoaTitle.textContent=t("aoaView");
+  const aoaBoard=document.createElement("div");aoaBoard.className="pose-board";
+  if(Number.isFinite(report.aoaDeg)){
+    const airflow=document.createElement("i");airflow.className="airflow";
+    const plane=document.createElement("i");plane.className="plane-side";plane.style.transform=`rotate(${-report.aoaDeg}deg)`;
+    aoaBoard.append(airflow,plane)
+  }else{aoaBoard.classList.add("geometry-empty");aoaBoard.textContent=t("noAoaData")}
+  const aoaCaption=document.createElement("div");aoaCaption.className="viz-caption";aoaCaption.textContent=rt(report.aoaText)||"--";
+  aoa.append(aoaTitle,aoaBoard,aoaCaption);root.append(roll,aoa)
+}
+function renderReport(report,comparison=null){
+  const [color,label]=statusVisual(report.status);document.documentElement.style.setProperty("--status",color);
+  setText("reportTime",t("reportEyebrow",{ts:report.timestamp||report.fileName}));
+  setText("reportTitle",t("reportTitle",{ts:report.timestamp||""}).trim()||report.fileName);
+  setText("reportExplanation",rt(report.explanation)||t("noExplanation"));
+  setText("statusLabel",label);setText("reportVersion",t("reportVersion",{v:report.version}));
+  setText("fpmCard",Number.isFinite(report.fpm)?`${report.fpm>=0?"+":""}${Math.round(report.fpm)} fpm`:t("fpmNoData"));
+  setText("fpmSourceHint",rt(report.fpmSource)||t("noFpmSource"));
+  setText("gCard",fmt(report.g,2," G"));
+  setText("speedCard",`${Number.isFinite(report.ias)?Math.round(report.ias):"--"} kt / ${Number.isFinite(report.gs)?Math.round(report.gs):"--"} kt`);
+  setText("flareCard",Number.isFinite(report.flareMetric)?report.flareMetric.toFixed(1):"--");
+  setText("flareHint",rt(report.flareTrend)||t("cardFlareHint"));
+  setText("fpmMeterValue",Number.isFinite(report.fpm)?`${Math.round(report.fpm)} fpm`:"--");
+  setText("gMeterValue",fmt(report.g,2," G"));
+  $("fpmPointer").style.left=`calc(${meterPercent(Number.isFinite(report.fpm)?Math.abs(report.fpm):null,0,350).toFixed(2)}% - 2px)`;
+  $("gPointer").style.left=`calc(${meterPercent(report.g,1,2).toFixed(2)}% - 2px)`;
+  setText("dominantInsight",dominantText(report));
+  setText("flareInsight",t("flareInsight",{trend:rt(report.flareTrend)||t("flareNoTrend")}));
+  setText("warningInsight",t("warningInsight",{bounce:rt(report.bounceText)||t("notProvided")}));
+  renderComparison(report,comparison);
+  renderFacts(report);renderDiagnostics(report);renderWind(report);renderPose(report);
+  $("rawText").textContent=report.raw;$("rawDetails").open=true;
+  drawFlare(report.trajectory,comparison?.trajectory||[])
+}
+function findFiftyFtTime(data){
+  for(let i=1;i<data.length;i++){
+    const a=data[i-1],b=data[i];
+    if(Number.isFinite(a.ra)&&Number.isFinite(b.ra)&&a.ra>=50&&b.ra<=50){
+      const span=a.ra-b.ra,ratio=span>0?(a.ra-50)/span:0;
+      return a.t+(b.t-a.t)*clamp(ratio,0,1)
+    }
+  }
+  return null
+}
+function nearestPoint(data,targetTime){
+  if(!data.length)return null;
+  let best=data[0],distance=Math.abs(best.t-targetTime);
+  for(const point of data){const gap=Math.abs(point.t-targetTime);if(gap<distance){distance=gap;best=point}}
+  return best
+}
+function selectedMetricDefs(){return state.selectedMetrics.map(key=>metricByKey[key]).filter(Boolean)}
+function saveMetricPreference(){
+  try{localStorage.setItem(METRIC_PREFERENCE_KEY,JSON.stringify(state.selectedMetrics))}catch{}
+}
+function renderMetricPicker(){
+  ui.metricPicker.replaceChildren();
+  for(const metric of TRAJECTORY_METRICS){
+    const chip=document.createElement("label");chip.className="metric-chip"+(state.selectedMetrics.includes(metric.key)?" selected":"");
+    chip.style.setProperty("--metric",metric.color);
+    const input=document.createElement("input");input.type="checkbox";input.value=metric.key;input.checked=state.selectedMetrics.includes(metric.key);
+    const dot=document.createElement("i");dot.className="metric-dot";
+    const label=document.createElement("span");label.textContent=t(metric.labelKey);
+    input.addEventListener("change",()=>{
+      if(input.checked){
+        if(!state.selectedMetrics.includes(metric.key))state.selectedMetrics.push(metric.key)
+      }else{
+        if(state.selectedMetrics.length===1){input.checked=true;return}
+        state.selectedMetrics=state.selectedMetrics.filter(key=>key!==metric.key)
+      }
+      saveMetricPreference();renderMetricPicker();redrawTrajectoryChart()
+    });
+    chip.append(input,dot,label);ui.metricPicker.append(chip)
+  }
+}
+function metricValueText(metric,value){
+  if(!Number.isFinite(value))return"--";
+  return`${value>=0&&metric.group==="verticalSpeed"?"+":""}${value.toFixed(metric.decimals)} ${metric.unit}`
+}
+function metricRangeText(metric,scale){
+  return`${scale.min.toFixed(metric.decimals)}–${scale.max.toFixed(metric.decimals)} ${metric.unit}`
+}
+function buildMetricScales(metrics,data,compareData){
+  const groups={};
+  for(const metric of metrics){
+    const bucket=groups[metric.group]||(groups[metric.group]={group:metric.group,unit:metric.unit,values:[]});
+    for(const point of [...data,...compareData])if(Number.isFinite(point[metric.key]))bucket.values.push(point[metric.key])
+  }
+  for(const bucket of Object.values(groups)){
+    let min=Math.min(...bucket.values),max=Math.max(...bucket.values);
+    if(bucket.group==="verticalSpeed"){max=Math.max(0,max)}
+    if(bucket.group==="altitude"||bucket.group==="attitude"){min=Math.min(0,min);max=Math.max(0,max)}
+    let span=max-min;
+    if(!Number.isFinite(span)||span===0){const center=Number.isFinite(min)?min:0;span=Math.max(2,Math.abs(center)*.2);min=center-span/2;max=center+span/2}
+    const pad=span*.08;bucket.min=min-pad;bucket.max=max+pad
+  }
+  return groups
+}
+function renderChartLegend(series,scales){
+  ui.chartLegend.replaceChildren();
+  for(const item of series){
+    const metric=item.metric,legend=document.createElement("div");legend.className="legend-item";legend.style.setProperty("--series-color",metric.color);
+    const line=document.createElement("i");line.className="legend-line";
+    const label=document.createElement("span");label.textContent=t(metric.labelKey);
+    const range=document.createElement("small");range.textContent=metricRangeText(metric,scales[metric.group]);
+    legend.append(line,label,range);ui.chartLegend.append(legend)
+  }
+  ui.chartLegend.hidden=!series.length
+}
+function drawMetricLine(c,points,metric,X,Y,comparison=false){
+  if(points.length<2)return;
+  c.save();c.strokeStyle=metric.color;c.lineWidth=comparison?3.5:2.6;c.lineJoin="round";c.lineCap="round";
+  c.globalAlpha=comparison?.24:1;c.setLineDash(comparison?[8,7]:[]);c.shadowColor=metric.color;c.shadowBlur=comparison?5:3;c.beginPath();
+  points.forEach((point,index)=>{const x=X(point.t),y=Y(metric,point[metric.key]);index?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();c.restore()
+}
+function drawFlare(data,compareData=[]){
+  const chartBox=$("chartBox"),validCompare=compareData.length>=2?compareData:[];
+  const metrics=selectedMetricDefs();
+  const series=metrics.map(metric=>({
+    metric,
+    main:data.filter(point=>Number.isFinite(point.t)&&Number.isFinite(point[metric.key])),
+    compare:validCompare.filter(point=>Number.isFinite(point.t)&&Number.isFinite(point[metric.key]))
+  })).filter(item=>item.main.length>=2||item.compare.length>=2);
+  if(data.length<2||!series.length){
+    chartBox.hidden=true;ui.canvas._plot=null;ui.chartLegend.hidden=true;return
+  }
+  chartBox.hidden=false;
+  const scales=buildMetricScales(series.map(item=>item.metric),data,validCompare);renderChartLegend(series,scales);
+  const canvas=ui.canvas,box=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(box.width*dpr));canvas.height=Math.max(1,Math.floor(box.height*dpr));
+  const c=canvas.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);
+  const groupKeys=Object.keys(scales),singleScale=groupKeys.length===1,p={l:singleScale?68:48,r:20,t:18,b:42},W=box.width,H=box.height,pw=W-p.l-p.r,ph=H-p.t-p.b;
+  const timeline=[...data,...validCompare].map(point=>point.t).filter(Number.isFinite),xmin=Math.min(...timeline),xmax=Math.max(...timeline);
+  const X=x=>p.l+(x-xmin)/(xmax-xmin||1)*pw;
+  const Y=(metric,value)=>{
+    const scale=scales[metric.group];
+    return p.t+(scale.max-value)/(scale.max-scale.min||1)*ph
+  };
+  c.clearRect(0,0,W,H);c.font="11px Inter, Microsoft YaHei";c.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=p.t+ph*i/4;c.strokeStyle="#E1E9F2";c.beginPath();c.moveTo(p.l,y);c.lineTo(W-p.r,y);c.stroke();
+    c.fillStyle="#5B6E80";c.textAlign="right";
+    if(singleScale){
+      const scale=scales[groupKeys[0]],value=scale.max-(scale.max-scale.min)*i/4;
+      c.fillText(`${value.toFixed(Math.abs(value)<20?1:0)} ${scale.unit}`,p.l-8,y+4)
+    }else c.fillText(`${100-i*25}%`,p.l-8,y+4)
+  }
+  for(let i=0;i<=5;i++){
+    const x=p.l+pw*i/5,value=xmin+(xmax-xmin)*i/5;c.strokeStyle="#DCE6EF";c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
+    c.fillStyle="#5B6E80";c.textAlign="center";c.fillText(`${value.toFixed(1)}s`,x,H-14)
+  }
+  const fpmMetric=series.find(item=>item.metric.group==="verticalSpeed")?.metric,verticalScale=scales.verticalSpeed;
+  if(fpmMetric&&verticalScale.min<=0&&verticalScale.max>=0){
+    const zeroY=Y(fpmMetric,0);c.save();c.setLineDash([8,6]);c.strokeStyle="#0B1F33";c.globalAlpha=.5;c.lineWidth=1.5;c.beginPath();c.moveTo(p.l,zeroY);c.lineTo(W-p.r,zeroY);c.stroke();
+    c.setLineDash([]);c.fillStyle="#3E5C74";c.textAlign="left";c.font="700 10px Inter, Microsoft YaHei";c.fillText(t("zeroFpm"),p.l+7,Math.max(p.t+11,zeroY-6));c.restore()
+  }
+  const compareFifty=findFiftyFtTime(validCompare);
+  if(compareFifty!==null){
+    const x=X(compareFifty);c.save();c.globalAlpha=.4;c.setLineDash([2,6]);c.strokeStyle="#7C3AED";c.lineWidth=1.5;c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
+    c.setLineDash([]);c.fillStyle="#7C3AED";c.font="700 10px Inter, Microsoft YaHei";c.textAlign="left";c.fillText(t("ra50Compare"),x+6,p.t+30);c.restore()
+  }
+  for(const item of series)drawMetricLine(c,item.compare,item.metric,X,Y,true);
+  for(const item of series)drawMetricLine(c,item.main,item.metric,X,Y,false);
+  const fifty=findFiftyFtTime(data);
+  if(fifty!==null){
+    const x=X(fifty),right=x<p.l+pw*.78;c.save();c.setLineDash([5,5]);c.strokeStyle="#F59E0B";c.lineWidth=2;c.beginPath();c.moveTo(x,p.t);c.lineTo(x,p.t+ph);c.stroke();
+    c.setLineDash([]);c.fillStyle="#B45309";c.font="700 11px Inter, Microsoft YaHei";c.textAlign=right?"left":"right";c.fillText(t("ra50Main"),x+(right?7:-7),p.t+14);c.restore()
+  }
+  canvas._plot={X,Y,p,pw,xmin,xmax,data,compareData:validCompare,metrics:series.map(item=>item.metric),scales}
+}
+function pointMetricSummary(point,metrics){
+  return metrics.filter(metric=>Number.isFinite(point?.[metric.key])).map(metric=>`${t(metric.labelKey)} ${metricValueText(metric,point[metric.key])}`).join(" · ")
+}
+function hoverChart(event){
+  const plot=ui.canvas._plot;if(!plot)return;
+  const rect=ui.canvas.getBoundingClientRect(),mx=event.clientX-rect.left;
+  const ratio=clamp((mx-plot.p.l)/(plot.pw||1),0,1),targetTime=plot.xmin+(plot.xmax-plot.xmin)*ratio;
+  const main=nearestPoint(plot.data,targetTime),reference=nearestPoint(plot.compareData,targetTime);if(!main)return;
+  const lines=[t("hoverMain",{t:main.t.toFixed(2),ra:Number.isFinite(main.ra)?main.ra.toFixed(1):"--"}),pointMetricSummary(main,plot.metrics)];
+  if(reference)lines.push(t("hoverCompare",{t:reference.t.toFixed(2),ra:Number.isFinite(reference.ra)?reference.ra.toFixed(1):"--"}),pointMetricSummary(reference,plot.metrics));
+  const anchor=plot.metrics.find(metric=>Number.isFinite(main[metric.key]));
+  ui.tip.style.display="block";ui.tip.style.left=`${Math.min(rect.width-330,Math.max(8,plot.X(main.t)+14))}px`;
+  ui.tip.style.top=`${Math.max(8,anchor?plot.Y(anchor,main[anchor.key])-70:20)}px`;ui.tip.textContent=lines.filter(Boolean).join("\n")
+}
+function activeRecord(){return state.records.find(item=>item.id===state.activeId)}
+function comparisonRecord(){return state.records.find(item=>item.id===state.compareId)}
+function clearRecords(){
+  state.records=[];state.activeId=null;state.compareId=null;state.importMode="main";
+  renderRecordList();ui.report.hidden=true;ui.drop.hidden=false;showError("")
+}
+function openPicker(mode="main"){
+  state.importMode=mode;ui.fileInput.multiple=mode!=="compare";ui.fileInput.click()
+}
+function redrawTrajectoryChart(){
+  const primary=activeRecord(),comparison=comparisonRecord();
+  if(primary)drawFlare(primary.report.trajectory,comparison?.report.trajectory||[])
+}
+
+// ---- i18n ----
+function applyLang(){
+  currentLang=(function(){try{return localStorage.getItem(LANG_KEY)==="en"?"en":"zh"}catch{return"zh"}})();
+  document.documentElement.lang=currentLang==="zh"?"zh-CN":"en";
+  document.title=t("pageTitle");
+  document.querySelectorAll("[data-i18n]").forEach(el=>{el.textContent=t(el.getAttribute("data-i18n"))});
+  document.querySelectorAll("[data-i18n-html]").forEach(el=>{el.innerHTML=t(el.getAttribute("data-i18n-html"))});
+  document.querySelectorAll("[data-i18n-title]").forEach(el=>{el.title=t(el.getAttribute("data-i18n-title"))});
+  const btn=$("langToggle");if(btn)btn.textContent=t("langSwitch");
+  renderMetricPicker();
+  renderCurrent()
+}
+function toggleLang(){
+  currentLang=currentLang==="zh"?"en":"zh";
+  try{localStorage.setItem(LANG_KEY,currentLang)}catch{}
+  applyLang()
+}
+
+$("langToggle").addEventListener("click",toggleLang);
+$("dropMark").addEventListener("click",()=>openPicker("main"));
+$("chooseFiles").addEventListener("click",()=>openPicker("main"));
+$("addFiles").addEventListener("click",()=>openPicker("main"));
+$("loadMore").addEventListener("click",()=>openPicker("main"));
+$("chooseCompare").addEventListener("click",()=>openPicker("compare"));
+$("clearFiles").addEventListener("click",clearRecords);
+$("cancelComparison").addEventListener("click",cancelComparison);
+$("swapComparison").addEventListener("click",swapComparison);
+ui.fileInput.addEventListener("change",event=>{importFiles(event.target.files,state.importMode);event.target.value=""});
+["dragenter","dragover"].forEach(type=>document.addEventListener(type,event=>{event.preventDefault();ui.drop.classList.add("drag")}));
+["dragleave","drop"].forEach(type=>document.addEventListener(type,event=>{event.preventDefault();ui.drop.classList.remove("drag")}));
+document.addEventListener("drop",event=>{
+  event.preventDefault();
+  const files=event.dataTransfer?event.dataTransfer.files:null;
+  if(files&&files.length)importFiles(files,"main");
+});
+ui.canvas.addEventListener("mousemove",hoverChart);ui.canvas.addEventListener("mouseleave",()=>ui.tip.style.display="none");
+renderMetricPicker();
+window.addEventListener("resize",redrawTrajectoryChart);
+applyLang();
+
+async function loadLuaLaunchReport(){
+  const launch=window.LMM_LAUNCH_REPORT;
+  if(!launch||typeof launch.name!=="string"||typeof launch.content!=="string")return;
+  try{
+    const file=new File(
+      [launch.content],
+      launch.name,
+      {type:"text/plain;charset=utf-8",lastModified:Number(launch.lastModified)||Date.now()}
+    );
+    await importFiles([file],"main")
+  }catch(error){
+    showError(`${t("errAutoLoad")}${error.message||error}`)
+  }
+}
+loadLuaLaunchReport();
+</script>
+</body>
+</html>

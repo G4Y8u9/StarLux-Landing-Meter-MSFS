@@ -23,7 +23,7 @@ except ImportError:
     try:
         from SimConnect import SimConnect
     except ImportError:
-        print("错误: 缺少依赖库。请在命令行运行 'pip install SimConnect' 安装后再试。")
+        print("错误: 缺少依赖库。请在命令行运行 'pip install SimConnect' 安装后再试。 | Missing dependency. Run 'pip install SimConnect' and try again.")
         exit()
     SIMCONNECT_DATATYPE = None
     SIMCONNECT_SIMOBJECT_TYPE = None
@@ -1309,7 +1309,7 @@ def analyze_landing(samples, touchdown_sample):
             selected_fpm = raw_touchdown_fpm
             # 诊断输出：打印各链样本数与触地前最后一小段原始样本，
             # 便于确认触地前终端窗口是否仍有采样断档。
-            print(f"[诊断] 终端窗口样本不足: 物理={physical_sample_count} VVI={vvi_sample_count} AGL={agl_sample_count}")
+            print(f"[诊断] 终端窗口样本不足: 物理={physical_sample_count} VVI={vvi_sample_count} AGL={agl_sample_count} | [Diagnostic] Insufficient terminal samples: physical={physical_sample_count} VVI={vvi_sample_count} AGL={agl_sample_count}")
             for s in sorted((x for x in samples if touch_time - 0.30 <= x.t <= touch_time), key=lambda x: x.t):
                 fpm = f"{s.fpm:.0f}" if s.fpm is not None else "None"
                 vy = f"{s.local_vy_mps:.3f}" if s.local_vy_mps is not None else "None"
@@ -1481,15 +1481,9 @@ def write_landing_report(report):
                 f.write(f"拉平曲率: 无有效结果（{report['landing_curve_analysis']['trend_text']}）\n")
             f.write(f"拉平轨迹结论: {report['landing_curve_analysis']['trend_text']}\n")
             f.write(f"弹跳检测: {'发生弹跳' if report['bounce_result']['detected'] else '未检测到弹跳'}\n")
-            f.write(f"机型（ICAO）: {report['landing_context']['aircraft_icao']}\n")
-            if report['landing_context']['airport_id'] == 'UNKNOWN':
-                f.write('落地机场: 未能识别\n')
-            else:
-                f.write(f"落地机场: {report['landing_context']['airport_id']} - {report['landing_context']['airport_name']}\n")
-            f.write(f"触地跑道方向: RWY{report['landing_context']['runway']}（推算）\n")
             f.write(f"IAS / GS: {report['landing_ias_kts']:.0f} / {report['landing_gs_kts']:.0f} kt\n")
             f.write(f"相对风: {build_wind_relative_text(report['landing_wind_heading_deg'], report['landing_wind_speed_kts'], report['landing_heading_deg'])}\n")
-            f.write(f"道面提示: {report['landing_surface']['warning_text']}\n\n")
+            f.write('\n')
 
             if report['bounce_result']['detected']:
                 bounce = report['bounce_result']
@@ -1526,7 +1520,7 @@ def write_landing_report(report):
             f.write(f"明显反转门槛: 相邻聚合FPM变化绝对值超过 {FLARE_REVERSAL_NOISE_FPM:.0f} fpm\n")
             f.write(f"高震荡规则: 反转次数 >= {FLARE_OSCILLATION_SEVERE_REVERSAL_MIN}，或反转次数 >= {FLARE_OSCILLATION_HIGH_REVERSAL_MIN} 且（单调改善效率 < {FLARE_OSCILLATION_EFFICIENCY_MAX:.2f} 或恶化区间比例 >= {FLARE_OSCILLATION_WORSENING_RATIO_MIN:.2f}）。\n")
             f.write('评分说明: 拉平曲率仅用于复盘，不参与最终评分。\n')
-            f.write(f"曲率分析耗时: {report['landing_curve_analysis']['calculation_ms']:.3f} ms\n\n")
+            f.write('\n')
 
             if report['flare_buckets']:
                 f.write('0.5秒聚合轨迹表\n')
@@ -1545,17 +1539,12 @@ def write_landing_report(report):
 
             f.write('三、飞行、位置与环境参考\n')
             f.write('----------------------------------------------------------------------\n')
-            f.write(f"触地点距机场参考点: {report['landing_context']['airport_distance_km']:.1f} km\n")
-            f.write('跑道说明: 根据触地磁航向推算，暂不区分 L/R/C。\n')
             f.write(f"真空速（TAS）: {report['landing_tas_kts']:.0f} kt\n")
             f.write(f"迎角: {report['landing_aoa_deg']:.1f} deg\n")
             f.write(f"横滚角: {roll_log_text(report['landing_roll_deg'])}\n")
             f.write(f"飞机磁航向: {report['landing_heading_deg']:.0f} deg\n")
             f.write(f"风向和风速: 来自 {round_num(normalize_deg(report['landing_wind_heading_deg'])):03d}deg， {round_num(report['landing_wind_speed_kts'])}kt\n")
-            f.write('触地前三分钟实际降水峰值: 0.0%\n')
-            f.write('连续达到降水阈值的采样数: 0\n')
-            f.write('跑道摩擦状态: 未获取\n')
-            f.write('道面判定来源: 未检测\n\n')
+            f.write('\n')
 
             f.write('四、FPM与G算法诊断\n')
             f.write('----------------------------------------------------------------------\n')
@@ -1614,7 +1603,7 @@ def write_landing_report(report):
             f.write('FPM 与 G 分别分档，最终评价取较严重等级。\n')
             f.write('完整数学复算附录: 关闭\n')
     except Exception as e:
-        print(f"[错误] 写入报告失败: {e}")
+        print(f"[错误] 写入报告失败: {e} | [Error] Failed to write report: {e}")
         return None
     return filepath
 
@@ -1803,18 +1792,18 @@ def build_sample(aq, now):
 
 
 def main():
-    print('正在连接到模拟飞行 (MSFS)...')
     sm = None
     while True:
         try:
             sm = BatchSimConnect(_BATCH_SIMVARS)
-            print('连接成功！正在抓取实时数据...\n')
+            print('\r模拟飞行程序已连接 | Simulator connected\n', end='', flush=True)
             break
         except KeyboardInterrupt:
-            print('\n\n程序已手动终止。')
+            print('\n\n程序已手动终止。 | Terminated manually.')
             return
-        except Exception as e:
-            print(f'连接失败，模拟飞行可能尚未启动。2 秒后重试。错误信息: {e}')
+        except Exception:
+            # 原地刷新连接状态，不滚动输出错误详情
+            print('\r模拟飞行程序未连接 | Simulator not connected', end='', flush=True)
             time.sleep(2.0)
 
     state_samples = deque(maxlen=RING_BUFFER_SIZE)
@@ -1828,7 +1817,7 @@ def main():
     last_agl = None
     last_valid_time = None
     frame_count = 0
-    print('准备监听落地事件...')
+    print('准备监听落地事件... | Ready to monitor landing events...')
 
     try:
         while True:
@@ -1900,7 +1889,7 @@ def main():
                         'second_g_ready': False,
                     },
                 }
-                print('\n\n>>> 触发起落分析：主轮接地检测到！')
+                print('\n\n>>> 触发起落分析：主轮接地检测到！ | Touchdown detected! Starting landing analysis...')
 
             if landing_active is not None:
                 landing_active['impact_timer'] += SAMPLE_INTERVAL_SECONDS
@@ -1914,9 +1903,9 @@ def main():
                 if transitioned:
                     bounce = landing_active['bounce']
                     if bounce['detected']:
-                        print('\n>>> 检测到弹跳：已记录第二次触地数据。')
+                        print('\n>>> 检测到弹跳：已记录第二次触地数据。 | Bounce detected: second touchdown recorded.')
                     if bounce['second_g_ready']:
-                        print(f"\n>>> 弹跳第二次触地分析完成：{bounce['second_curve_g']:.2f} G。")
+                        print(f"\n>>> 弹跳第二次触地分析完成：{bounce['second_curve_g']:.2f} G。 | Second-touch analysis complete: {bounce['second_curve_g']:.2f} G.")
 
                 # 主分析在 1.20 s 冲击采集完成后执行；若弹跳正处于离地或
                 # 第二次压缩采集阶段，则等待其结束再写报告，确保第二次触地
@@ -1928,23 +1917,23 @@ def main():
                         report = analyze_landing(landing_samples, landing_active['touch_sample'])
                         report_path = write_landing_report(report)
                         if report_path:
-                            print(f'\n>>> 分析完成！报告已保存至: {report_path}')
+                            print(f'\n>>> 分析完成！报告已保存至: {report_path} | Analysis complete! Report saved to: {report_path}')
                         else:
-                            print('\n>>> 分析完成，但报告写入失败。')
+                            print('\n>>> 分析完成，但报告写入失败。 | Analysis complete, but report write failed.')
                         landing_active = None
-                        print('继续监听下一次起落 (拉起飞机即可)...\n')
+                        print('继续监听下一次起落 (拉起飞机即可)... | Listening for the next landing (rotate to take off)...\n')
 
             # 状态行每 5 帧刷新一次，降低 Windows 控制台 I/O 对采样率的拖累。
             if frame_count % 5 == 0:
-                status_text = '地面' if sample.on_ground else '空中'
+                status_text = '地面 (On ground)' if sample.on_ground else '空中 (Airborne)'
                 print(f"\r飞行状态: {status_text} | 下降率: {sample.fpm if sample.fpm is not None else 0:5.0f} fpm | 实时G值: {sample.g_force if sample.g_force is not None else 0:4.2f} G | IAS: {sample.ias_kts:3.0f} kt   ", end='', flush=True)
             was_on_ground = sample.on_ground
             time.sleep(SAMPLE_INTERVAL_SECONDS)
 
     except KeyboardInterrupt:
-        print('\n\n程序已手动终止。')
+        print('\n\n程序已手动终止。 | Terminated manually.')
     except Exception as e:
-        print(f'\n运行过程中出现意外错误: {e}')
+        print(f'\n运行过程中出现意外错误: {e} | Unexpected runtime error: {e}')
 
 if __name__ == '__main__':
     main()
