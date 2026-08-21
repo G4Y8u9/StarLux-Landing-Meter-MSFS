@@ -38,7 +38,7 @@ pip install SimConnect
 python starlux_LMM_pyver.py
 ```
 
-其余流程与方式一完全相同：连接 MSFS → 监听落地 → 自动生成报告 → 用 `LMM_Report_Reader_v2.html`（或 `LMM_Report_Reader_Light.html`）打开报告复盘。
+其余流程与方式一完全相同：连接 MSFS → 监听落地 → 自动生成报告 → 用 `LMM_Report_Reader_v2.html`打开报告复盘。
 
 > **说明**：exe 只是把 Python 环境与依赖（SimConnect / pystray / PIL / tkinter）打包好了，两种方式生成的报告与可视化结果完全一致。
 
