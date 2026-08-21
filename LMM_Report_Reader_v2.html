@@ -57,6 +57,7 @@ a:hover{text-decoration:underline}
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0
 }
+.sidebar .brand{white-space:normal;overflow:visible;text-overflow:clip;font-size:14px;line-height:1.45;margin-bottom:16px}
 .top-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .lang-toggle{
   border:1px solid var(--line2);background:var(--glass);backdrop-filter:blur(10px);
@@ -65,6 +66,7 @@ a:hover{text-decoration:underline}
 }
 .lang-toggle:hover{transform:translateY(-2px);box-shadow:var(--glow);border-color:rgba(0,102,255,.4)}
 .privacy{border:1px solid rgba(22,163,74,.28);background:rgba(22,163,74,.08);color:#15803D;border-radius:999px;padding:7px 13px;font-size:11px;white-space:nowrap}
+.sidebar .privacy{margin-top:14px;text-align:center;display:block;white-space:normal}
 .workspace{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
 .sidebar{
   position:sticky;top:20px;border:1px solid var(--line);
@@ -106,6 +108,7 @@ a:hover{text-decoration:underline}
 .compare-action:disabled{cursor:default;opacity:.58;transform:none}
 .compare-action.selected{border-style:dashed;border-color:var(--purple);color:var(--purple);background:rgba(124,58,237,.08)}
 .side-note{color:var(--muted);font-size:10px;line-height:1.7;margin-top:14px}
+.sidebar .lang-toggle{width:100%;margin-top:8px;text-align:center}
 .main{min-width:0}
 .drop{
   min-height:560px;border:2px dashed rgba(0,102,255,.28);border-radius:26px;
@@ -132,7 +135,8 @@ a:hover{text-decoration:underline}
   backdrop-filter:blur(14px);
   border-radius:18px
 }
-.hero{position:relative;overflow:hidden;padding:28px 30px;box-shadow:var(--shadow)}
+.hero{position:relative;overflow:hidden;padding:18px 22px;box-shadow:var(--shadow)}
+.hero>h1,.hero .grid{position:relative;z-index:1}
 .hero:after{
   content:"";position:absolute;right:-50px;top:-90px;width:280px;height:230px;border-radius:50%;
   background:linear-gradient(135deg,rgba(0,102,255,.16),rgba(0,242,254,.14));filter:blur(2px)
@@ -149,12 +153,13 @@ h1{font-size:clamp(22px,3vw,30px);line-height:1.2;margin:0 0 9px}
 .status small{display:block;color:var(--muted);margin-bottom:6px;font-size:11px}
 .status strong{font-size:18px}
 .status .version{font-size:11px;color:var(--muted);margin-top:5px}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:15px}
-.card{padding:16px;min-height:110px;transition:.18s ease}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:11px;margin-top:14px}
+.card{padding:14px;min-height:96px;transition:.18s ease}
 .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-soft);border-color:rgba(0,102,255,.25)}
-.card .label{font-size:11px;color:var(--muted);margin-bottom:10px}
-.card .value{font-size:clamp(18px,2vw,24px);font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere}
-.card .hint{font-size:11px;color:var(--soft);margin-top:7px;line-height:1.55}
+.card .label{font-size:11px;color:var(--muted);margin-bottom:8px}
+.card .value{font-size:clamp(16px,1.7vw,21px);font-weight:800;letter-spacing:-.02em;overflow-wrap:anywhere}
+.card .hint{font-size:11px;color:var(--soft);margin-top:6px;line-height:1.5}
+.card.status-card{border-left:5px solid var(--status);background:linear-gradient(180deg,color-mix(in srgb,var(--status) 8%,#fff),rgba(255,255,255,.85));box-shadow:var(--shadow-soft)}
 .card .compare-line{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line2);color:var(--soft);font-size:10px;line-height:1.5}
 .compare-panel{margin-top:15px;border:1px dashed rgba(124,58,237,.4);background:linear-gradient(180deg,rgba(245,242,255,.9),rgba(255,255,255,.85));backdrop-filter:blur(10px);border-radius:18px;padding:17px}
 .compare-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap}
@@ -190,6 +195,12 @@ h1{font-size:clamp(22px,3vw,30px);line-height:1.2;margin:0 0 9px}
 .style-line.compare{border-top-style:dashed;opacity:.35}
 .chart-scale-note{color:var(--muted);font-size:9px;line-height:1.5}
 .layout{display:grid;grid-template-columns:1.45fr .75fr;gap:15px;margin-top:15px}
+.layout.eq{grid-template-columns:1fr 1fr}
+.context-grid #windGraphic{flex:1;min-height:178px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.context-grid #windGraphic .wind-board{transform:none}
+.context-grid .pose-board{height:104px}
+.context-grid .pose-mini{padding:6px}
+.context-grid .context-viz-card{padding:10px}
 .layout .section{display:flex;flex-direction:column}
 .section{padding:19px}
 .section h2,.viz-title{font-size:17px;margin:0 0 5px}
@@ -209,6 +220,11 @@ h1{font-size:clamp(22px,3vw,30px);line-height:1.2;margin:0 0 9px}
 .fact span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
 .fact b{font-size:16px;font-weight:700;overflow-wrap:anywhere}
 .context-detail{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:15px}
+.context-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;flex:1}
+.context-viz-card{border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.72);padding:12px;display:flex;flex-direction:column}
+.context-viz-title{font-size:13px;margin:0 0 8px;color:var(--soft)}
+.context-viz-card .viz-caption{margin-top:6px}
+.context-grid .pose-grid{flex:1}
 .viz-card{padding:17px;min-height:278px;transition:.18s ease}
 .viz-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-soft)}
 .viz-caption{text-align:center;color:var(--soft);font-size:11px;line-height:1.6;margin-top:7px}
@@ -223,7 +239,7 @@ h1{font-size:clamp(22px,3vw,30px);line-height:1.2;margin:0 0 9px}
 .nose-label{position:absolute;left:50%;top:7px;transform:translateX(-50%);font-size:9px;color:var(--muted);z-index:4;letter-spacing:.06em}
 .wind-arrow{position:absolute;left:calc(50% - 2px);top:20px;width:4px;height:49px;background:linear-gradient(180deg,var(--accent),var(--cyan));border-radius:4px;transform-origin:2px 69px;z-index:4;box-shadow:0 0 10px rgba(0,102,255,.5)}
 .wind-arrow:after{content:"";position:absolute;left:-5px;bottom:-5px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid var(--accent)}
-.pose-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pose-grid{display:grid;grid-template-columns:1fr;gap:8px}
 .pose-mini{border:1px solid var(--line2);background:#EAF2FB;border-radius:12px;padding:9px;text-align:center}
 .pose-mini b{font-size:10px}
 .pose-board{height:160px;border:0;border-radius:7px;margin-top:5px}
@@ -254,28 +270,24 @@ footer{color:var(--muted);font-size:10px;line-height:1.7;margin-top:21px;text-al
 footer a{color:var(--accent)}
 footer a:hover{text-decoration:underline}
 @media(max-width:1080px){.workspace{grid-template-columns:1fr}.sidebar{position:static}.record-list{max-height:250px}.context-detail{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.compare-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.app{padding:18px 12px 40px}.layout,.hero-grid{grid-template-columns:1fr}.status{min-width:0}.facts{grid-template-columns:1fr}.pose-grid{grid-template-columns:1fr}.drop{min-height:480px}.topbar{align-items:flex-start;flex-direction:column}.compare-head{flex-direction:column}.compare-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.app{padding:18px 12px 40px}.layout,.layout.eq,.hero-grid{grid-template-columns:1fr}.facts{grid-template-columns:1fr}.pose-grid{grid-template-columns:1fr}.context-grid{grid-template-columns:1fr}.drop{min-height:480px}.topbar{align-items:flex-start;flex-direction:column}.compare-head{flex-direction:column}.compare-grid{grid-template-columns:1fr}}
 @media(max-width:470px){.grid{grid-template-columns:1fr}h1,.drop h1{font-size:24px}.hero{padding:21px}.privacy{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
-  <header class="topbar">
-    <div class="brand" data-i18n="brand">STARLUX 落地指标监视器 · 报告阅读器 v2</div>
-    <div class="top-right">
-      <button class="lang-toggle" id="langToggle" type="button" title="Language">EN</button>
-      <div class="privacy" data-i18n="privacy">完全本地读取 · 数据不会上传</div>
-    </div>
-  </header>
   <div class="workspace">
     <aside class="sidebar">
+      <div class="brand" data-i18n="brand">STARLUX 落地报告阅读器</div>
       <div class="side-title"><h2 data-i18n="recordsTitle">已载入记录</h2><span class="count" id="recordCount">0</span></div>
       <div class="side-actions">
         <button class="btn primary" id="addFiles" type="button" data-i18n="selectTxt">选择 TXT</button>
         <button class="btn danger" id="clearFiles" type="button" title="只清除网页内存，不删除磁盘文件" data-i18n="clear">清空</button>
       </div>
       <div class="record-list" id="recordList"></div>
-      <div class="side-note" data-i18n="sideNote">点击记录主体切换主要数据；右侧“对比”按钮选择参考数据。关闭页面后自动清空，不会删除原始 TXT。</div>
+      <button class="lang-toggle" id="langToggle" type="button" title="Language">EN</button>
+      <div class="side-note" data-i18n="sideNote">支持拖入或选择 TXT 文件，解析后将显示着陆数据。数据仅在本地解析，不会上传；关闭页面后自动清空。</div>
+      <div class="privacy" data-i18n="privacy">完全本地读取 · 数据不会上传</div>
     </aside>
     <main class="main">
       <div class="error" id="errorBox"></div>
@@ -290,21 +302,13 @@ footer a:hover{text-decoration:underline}
       </section>
       <section class="report" id="report" hidden>
         <section class="hero">
-          <div class="hero-grid">
-            <div>
-              <div class="eyebrow" id="reportTime">LANDING REPORT</div>
-              <h1 id="reportTitle">--</h1>
-              <div class="sub" id="reportExplanation">--</div>
-              <div class="hero-actions">
-                <button class="btn ghost" id="loadMore" type="button" data-i18n="loadMore">载入更多日志</button>
-                <button class="btn ghost" id="chooseCompare" type="button" data-i18n="chooseCompare">选择对比日志</button>
-              </div>
-            </div>
-            <div class="status">
-              <small data-i18n="finalRating">最终评价</small>
-              <strong id="statusLabel">--</strong>
-              <div class="version" id="reportVersion">--</div>
-            </div>
+          <h1 id="reportTitle">--</h1>
+          <div class="grid">
+            <article class="card"><div class="label" data-i18n="cardFpm">触地下降率</div><div class="value" id="fpmCard">--</div><div class="hint" id="fpmSourceHint" data-i18n="cardFpmHint">按报告记录的下降率来源显示</div><div class="compare-line" id="fpmCompareLine" hidden></div></article>
+            <article class="card"><div class="label" data-i18n="cardG">最终载荷</div><div class="value" id="gCard">--</div><div class="hint" data-i18n="cardGHint">沿用原报告最终显示值</div><div class="compare-line" id="gCompareLine" hidden></div></article>
+            <article class="card"><div class="label" data-i18n="cardSpeed">指示空速 / 地速</div><div class="value" id="speedCard">--</div><div class="hint" id="speedHint" data-i18n="cardSpeedHint">IAS / GS</div><div class="compare-line" id="speedCompareLine" hidden></div></article>
+            <article class="card"><div class="label" data-i18n="cardFlare">拉平曲率</div><div class="value" id="flareCard">--</div><div class="hint" id="flareHint" data-i18n="cardFlareHint">该记录未提供拉平分析</div><div class="compare-line" id="flareCompareLine" hidden></div></article>
+            <article class="card status-card"><div class="label" data-i18n="finalRating">最终评价</div><div class="value" id="statusLabel">--</div><div class="hint" id="reportVersion">--</div></article>
           </div>
         </section>
 
@@ -319,16 +323,8 @@ footer a:hover{text-decoration:underline}
           <div class="compare-grid" id="compareMetrics"></div>
         </section>
 
-        <section class="grid">
-          <article class="card"><div class="label" data-i18n="cardFpm">触地下降率</div><div class="value" id="fpmCard">--</div><div class="hint" id="fpmSourceHint" data-i18n="cardFpmHint">按报告记录的下降率来源显示</div><div class="compare-line" id="fpmCompareLine" hidden></div></article>
-          <article class="card"><div class="label" data-i18n="cardG">最终载荷</div><div class="value" id="gCard">--</div><div class="hint" data-i18n="cardGHint">沿用原报告最终显示值</div><div class="compare-line" id="gCompareLine" hidden></div></article>
-          <article class="card"><div class="label" data-i18n="cardSpeed">指示空速 / 地速</div><div class="value" id="speedCard">--</div><div class="hint" data-i18n="cardSpeedHint">IAS / GS</div><div class="compare-line" id="speedCompareLine" hidden></div></article>
-          <article class="card"><div class="label" data-i18n="cardFlare">拉平曲率</div><div class="value" id="flareCard">--</div><div class="hint" id="flareHint" data-i18n="cardFlareHint">该记录未提供拉平分析</div><div class="compare-line" id="flareCompareLine" hidden></div></article>
-        </section>
-
-        <div class="layout">
+        <div class="layout eq">
           <section class="section">
-            <h2 data-i18n="scoreTitle">评分构成</h2><div class="lead" data-i18n="scoreLead">按当前日志中的 FPM 与 G 解释评分，不改写原报告结论。</div>
             <div class="meter-wrap">
               <div class="meter-head"><span data-i18n="meterFpm">下降率</span><b id="fpmMeterValue">--</b></div>
               <div class="meter"><i class="pointer" id="fpmPointer"></i></div>
@@ -354,21 +350,18 @@ footer a:hover{text-decoration:underline}
             <div class="insight" id="warningInsight">--</div>
           </section>
           <aside class="section">
-            <h2 data-i18n="contextTitle">着陆上下文</h2><div class="lead" data-i18n="contextLead">快速还原接地环境和机体状态。</div>
-            <div class="facts" id="facts"></div>
+            <div class="context-grid">
+              <div class="context-viz-card">
+                <h3 class="context-viz-title" data-i18n="windTitle">相对风向</h3>
+                <div id="windGraphic"></div><div class="viz-caption" id="windCaption">--</div>
+              </div>
+              <div class="context-viz-card">
+                <h3 class="context-viz-title" data-i18n="poseTitle">接地姿态</h3>
+                <div class="pose-grid" id="poseGraphic"></div>
+              </div>
+            </div>
           </aside>
         </div>
-
-        <section class="context-detail" id="contextDetails">
-          <article class="viz-card">
-            <h2 class="viz-title" data-i18n="windTitle">相对风向</h2><div class="viz-sub" data-i18n="windSub">飞机固定朝上；蓝色箭头表示气流从哪里吹向飞机。</div>
-            <div id="windGraphic"></div><div class="viz-caption" id="windCaption">--</div>
-          </article>
-          <article class="viz-card">
-            <h2 class="viz-title" data-i18n="poseTitle">接地姿态</h2><div class="viz-sub" data-i18n="poseSub">用简化机体示意横滚和迎角。</div>
-            <div class="pose-grid" id="poseGraphic"></div><div class="viz-caption" data-i18n="poseCaption">快速复盘示意，不代替飞机姿态仪或飞行数据记录器。</div>
-          </article>
-        </section>
 
         <div class="layout">
           <section class="section">
@@ -385,13 +378,13 @@ footer a:hover{text-decoration:underline}
             <div class="chart-box" id="chartBox"><canvas id="flareChart"></canvas><div class="tooltip" id="chartTip"></div></div>
           </section>
           <aside class="section">
-            <h2 data-i18n="diagTitle">测量与载荷诊断</h2><div class="lead" data-i18n="diagLead">v1.1 会显示下降率取值、三链对照与冲量一致性；详细数学日志可提供更多中间量。</div>
+            <h2 data-i18n="diagTitle">测量与载荷诊断</h2>
             <table class="diag" id="diagnostics"></table>
           </aside>
         </div>
 
         <details id="rawDetails" open><summary data-i18n="rawSummary">完整原始 TXT</summary><pre id="rawText"></pre></details>
-        <footer data-i18n-html="footerHtml">StarLux LMM 报告阅读器 v2 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。<br>本页面来自Starlux531的<a href="https://github.com/Starlux531/StarLux-Landing-Meter" target="_blank" rel="noopener">项目</a> 由<a href="https://github.com/G4Y8u9" target="_blank" rel="noopener">G4Y8u9</a>修改</footer>
+        <footer data-i18n-html="footerHtml">STARLUX 落地报告阅读器 v2 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。<br>本页面来自Starlux531的<a href="https://github.com/Starlux531/StarLux-Landing-Meter" target="_blank" rel="noopener">项目</a> 由<a href="https://github.com/G4Y8u9" target="_blank" rel="noopener">G4Y8u9</a>修改</footer>
       </section>
     </main>
   </div>
@@ -408,13 +401,13 @@ const LANG_KEY="starlux-lmm-lang";
 const I18N={
   zh:{
     pageTitle:"StarLux LMM 报告阅读器 v2",
-    brand:"STARLUX 落地指标监视器 · 报告阅读器 v2",
+    brand:"STARLUX 落地报告阅读器",
     privacy:"完全本地读取 · 数据不会上传",
     langSwitch:"EN",
     recordsTitle:"已载入记录",
     selectTxt:"选择 TXT",
     clear:"清空",
-    sideNote:"点击记录主体切换主要数据；右侧“对比”按钮选择参考数据。关闭页面后自动清空，不会删除原始 TXT。",
+    sideNote:"支持拖入或选择 TXT 文件，解析后将显示着陆数据。数据仅在本地解析，不会上传；关闭页面后自动清空。",
     dropTitle:"把落地日志拖到这里",
     dropDesc:"无需启动 X-Plane / MSFS。<br> 选择一份或多份 <b>Starlux_Report_*.txt</b>，网页会立即在本机解析评分、载荷、风向、姿态和 100 ft 后拉平轨迹。",
     chooseLogs:"选择落地日志",
@@ -453,7 +446,7 @@ const I18N={
     diagTitle:"测量与载荷诊断",
     diagLead:"v1.1 会显示下降率取值、三链对照与冲量一致性；详细数学日志可提供更多中间量。",
     rawSummary:"完整原始 TXT",
-    footerHtml:"StarLux LMM 报告阅读器 v2 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。<br>本页面来自Starlux531的<a href=\"https://github.com/Starlux531/StarLux-Landing-Meter\" target=\"_blank\" rel=\"noopener\">项目</a> 由<a href=\"https://github.com/G4Y8u9\" target=\"_blank\" rel=\"noopener\">G4Y8u9</a>修改",
+    footerHtml:"STARLUX 落地报告阅读器 v2 · 文件仅由当前浏览器页面读取<br>本报告仅用于飞行模拟复盘，不替代航司、维修或适航判定。<br>本页面来自Starlux531的<a href=\"https://github.com/Starlux531/StarLux-Landing-Meter\" target=\"_blank\" rel=\"noopener\">项目</a> 由<a href=\"https://github.com/G4Y8u9\" target=\"_blank\" rel=\"noopener\">G4Y8u9</a>修改",
     recordMeta:"{ts} · {eval}",
     timeUnknown:"时间未知",
     recordPrimary:"主数据",
@@ -550,13 +543,13 @@ const I18N={
   },
   en:{
     pageTitle:"StarLux LMM Report Reader v2",
-    brand:"STARLUX LANDING METRICS MONITOR · Report Reader v2",
+    brand:"STARLUX Landing Report Reader",
     privacy:"100% local · nothing is uploaded",
     langSwitch:"中文",
     recordsTitle:"Loaded Records",
     selectTxt:"Select TXT",
     clear:"Clear",
-    sideNote:"Click a record to make it primary; use “Compare” on the right to pick a reference. Cleared automatically when the page closes — original TXT files are never deleted.",
+    sideNote:"Drag in or pick TXT files — landing data is parsed and shown right away. Everything is parsed locally, nothing is uploaded; cleared automatically when the page closes.",
     dropTitle:"Drop your landing logs here",
     dropDesc:"No need to launch X-Plane / MSFS.<br>Pick one or more <b>Starlux_Report_*.txt</b> files — the page instantly parses rating, load, wind, attitude and the flare trajectory after 100 ft, all locally.",
     chooseLogs:"Choose Landing Logs",
@@ -595,7 +588,7 @@ const I18N={
     diagTitle:"Measurement & Load Diagnostics",
     diagLead:"v1.1 shows FPM source, three-chain comparison and impulse consistency; the detailed math log exposes more intermediates.",
     rawSummary:"Full Raw TXT",
-    footerHtml:"StarLux LMM Report Reader v2 · files are read only by this browser page<br>For flight-sim debrief only — not a substitute for airline, maintenance or airworthiness determinations.<br>Page based on Starlux531's <a href=\"https://github.com/Starlux531/StarLux-Landing-Meter\" target=\"_blank\" rel=\"noopener\">project</a> — modified by <a href=\"https://github.com/G4Y8u9\" target=\"_blank\" rel=\"noopener\">G4Y8u9</a>",
+    footerHtml:"STARLUX Landing Report Reader v2 · files are read only by this browser page<br>For flight-sim debrief only — not a substitute for airline, maintenance or airworthiness determinations.<br>Page based on Starlux531's <a href=\"https://github.com/Starlux531/StarLux-Landing-Meter\" target=\"_blank\" rel=\"noopener\">project</a> — modified by <a href=\"https://github.com/G4Y8u9\" target=\"_blank\" rel=\"noopener\">G4Y8u9</a>",
     recordMeta:"{ts} · {eval}",
     timeUnknown:"unknown time",
     recordPrimary:"Primary",
@@ -1075,22 +1068,16 @@ function renderComparison(primary,comparison){
   addCompareMetric(root,t("compareMetricFlare"),fmt(primary.flareMetric,1,""),fmt(comparison.flareMetric,1,""),signedDelta(primary.flareMetric,comparison.flareMetric,1,""));
 }
 function renderFacts(report){
-  const facts=[
-    [t("factWind"),rt(report.windText)||"--"],[t("factAoa"),rt(report.aoaText)||"--"],
-    [t("factRoll"),rt(report.rollText)||"--"],[t("factFlareTime"),report.flareDuration||"--"],[t("factRecovery"),report.flareRecovery||"--"]
-  ];
-  const root=$("facts");root.replaceChildren();
-  for(const [label,value] of facts){
-    const div=document.createElement("div");div.className="fact";
-    const span=document.createElement("span");span.textContent=label;
-    const strong=document.createElement("b");strong.textContent=value||"--";
-    div.append(span,strong);root.append(div)
-  }
+  setText("speedCard",`${Number.isFinite(report.ias)?Math.round(report.ias):"--"} kt / ${Number.isFinite(report.gs)?Math.round(report.gs):"--"} kt`);
+  setText("flareCard",Number.isFinite(report.flareMetric)?report.flareMetric.toFixed(1):"--");
+  setText("flareHint",rt(report.flareTrend)||t("cardFlareHint"));
 }
 function renderDiagnostics(report){
   const rows=[
+    [t("factFlareTime"),report.flareDuration||"--"],
     [t("diagFpmSource"),rt(report.fpmSource)||"--"],[t("diagFpmMethod"),rt(report.fpmMethod)||"--"],
     [t("diagTrajectorySource"),rt(report.trajectorySource||report.fpmSource)||"--"],[t("diagFpmConfidence"),rt(report.fpmConfidence)||"--"],
+    [t("factRecovery"),report.flareRecovery||"--"],
     [t("diagPhysicalVvi"),`${report.physicalFpm||"--"} / ${report.vviFpm||"--"}`],[t("diagAgl"),report.aglFpm||"--"],
     [t("diagFinalG"),fmt(report.g,3," G")],[t("diagTouchG"),fmt(report.touchG,3," G")],
     [t("diagPeakG"),fmt(report.peakG,3," G")],[t("diagCurveG"),fmt(report.curveG,3," G")],
@@ -1145,16 +1132,11 @@ function renderPose(report){
 }
 function renderReport(report,comparison=null){
   const [color,label]=statusVisual(report.status);document.documentElement.style.setProperty("--status",color);
-  setText("reportTime",t("reportEyebrow",{ts:report.timestamp||report.fileName}));
   setText("reportTitle",t("reportTitle",{ts:report.timestamp||""}).trim()||report.fileName);
-  setText("reportExplanation",rt(report.explanation)||t("noExplanation"));
   setText("statusLabel",label);setText("reportVersion",t("reportVersion",{v:report.version}));
   setText("fpmCard",Number.isFinite(report.fpm)?`${report.fpm>=0?"+":""}${Math.round(report.fpm)} fpm`:t("fpmNoData"));
   setText("fpmSourceHint",rt(report.fpmSource)||t("noFpmSource"));
   setText("gCard",fmt(report.g,2," G"));
-  setText("speedCard",`${Number.isFinite(report.ias)?Math.round(report.ias):"--"} kt / ${Number.isFinite(report.gs)?Math.round(report.gs):"--"} kt`);
-  setText("flareCard",Number.isFinite(report.flareMetric)?report.flareMetric.toFixed(1):"--");
-  setText("flareHint",rt(report.flareTrend)||t("cardFlareHint"));
   setText("fpmMeterValue",Number.isFinite(report.fpm)?`${Math.round(report.fpm)} fpm`:"--");
   setText("gMeterValue",fmt(report.g,2," G"));
   $("fpmPointer").style.left=`calc(${meterPercent(Number.isFinite(report.fpm)?Math.abs(report.fpm):null,0,350).toFixed(2)}% - 2px)`;
@@ -1352,8 +1334,6 @@ $("langToggle").addEventListener("click",toggleLang);
 $("dropMark").addEventListener("click",()=>openPicker("main"));
 $("chooseFiles").addEventListener("click",()=>openPicker("main"));
 $("addFiles").addEventListener("click",()=>openPicker("main"));
-$("loadMore").addEventListener("click",()=>openPicker("main"));
-$("chooseCompare").addEventListener("click",()=>openPicker("compare"));
 $("clearFiles").addEventListener("click",clearRecords);
 $("cancelComparison").addEventListener("click",cancelComparison);
 $("swapComparison").addEventListener("click",swapComparison);
