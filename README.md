@@ -46,9 +46,9 @@ python starlux_LMM_pyver.py
 
 ## 一、项目简介
 
-StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：飞机主轮接地后自动计算 **触地下降率（FPM）与接地过载（G）**，并输出评级（NICE / STABLE / ATTENTION / UNSTABLE），附带 100 ft 后拉平轨迹、弹跳检测、风向姿态等复盘数据。
+StarLux-Landing-Meter-MSFS 是一款飞行模拟复盘工具：飞机主轮接地后自动计算 **触地下降率（FPM）与接地过载（G）**，并输出评级（NICE / STABLE / ATTENTION / UNSTABLE），附带 100 ft 后拉平轨迹、弹跳检测、风向姿态等复盘数据。
 
-原项目在 X-Plane 内以 FlyWithLua 脚本运行，本移植版改为 **Python 脚本通过 SimConnect 读取 MSFS 数据**，生成与 Lua 版同格式的 TXT 报告，再用配套的 HTML 报告阅读器可视化。
+[原项目](https://github.com/Starlux531/StarLux-Landing-Meter)在 X-Plane 内以 FlyWithLua 脚本运行，本移植版改为 **Python 脚本通过 SimConnect 读取 MSFS 数据**，生成与 Lua 版同格式的 TXT 报告，再用配套的 HTML 报告阅读器可视化。
 
 > **算法逻辑说明**：核心算法（三链 FPM 验证、AGL 几何闭合链、G 过载与冲量一致性、拉平曲线、弹跳评分等）完整复现自原 Lua 项目，具体公式与设计思路请查看[原项目仓库](https://github.com/Starlux531/StarLux-Landing-Meter)。
 
@@ -65,12 +65,6 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
    pip install SimConnect
    ```
 
-- **可选依赖**（仅运行 `starlux_tray_launcher.py` 托盘版启动器时需要）：
-
-   ```bash
-   pip install pystray pillow
-   ```
-
 - **模拟器**：Microsoft Flight Simulator 2020 / 2024（建议先启动游戏并加载好飞机，再运行程序）
 
 ---
@@ -80,16 +74,10 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
 | 文件 | 说明 |
 | --- | --- |
 | `starlux_LMM_pyver.py` | Python 主程序源码：连接 MSFS、采样、落地分析、生成 TXT 报告 |
-| `starlux_tray_launcher.py` | 托盘版启动器源码：带窗口 + 系统托盘，界面中英双语（exe 即由此打包） |
-| `StarLux_LMM.spec` | PyInstaller 打包配置（onefile / noconsole / 图标） |
-| `make_icon.py` | 从 `1.png` 生成多尺寸 `starlux_icon.ico` 的脚本 |
-| `starlux_icon.ico` | 程序图标（桌面 / 窗口 / 托盘共用） |
 | `LMM_Report_Reader_v2.html` | 最新版本地 HTML 报告阅读器（中英双语，随 Release 发布） |
-| `LMM_Report_Reader_Light.html` | 报告阅读器（浅色精简版，与 v2 同源） |
-| `LMM_Report_Reader.html` | 报告阅读器（早期版本） |
-| `Starlux_Report_2026-08-19_16-13-45.txt` | 一份真实落地的报告**样本**，可直接拖入 HTML 阅读器查看效果 |
+| `Starlux_Report_2026-08-21_15-15-03.txt` | 一份真实落地的报告**样本**，可直接拖入 HTML 阅读器查看效果 |
 
-`dist/`（打包产物，随 Release 发布）：
+Release 内容：
 
 | 文件 | 说明 |
 | --- | --- |
@@ -104,13 +92,13 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
    - **exe 方式**：直接双击 Release 里的 `StarLux-Landing-Meter-MSFS.exe`；
    - **Python 方式**：`python starlux_LMM_pyver.py`。
 2. 程序连接 MSFS 后开始以 16 Hz 监听。主轮接地的瞬间自动触发起落分析，约 1.2 秒冲击采集结束后自动生成报告并在窗口提示保存路径（默认保存到桌面 `Starlux_Report_*.txt`）；
-3. 用浏览器打开 `LMM_Report_Reader_v2.html`（Release 版）或 `LMM_Report_Reader_Light.html`，把生成的 TXT 报告（或项目内样本）**拖入 / 选择**，即可可视化查看评分、载荷、风向姿态、100 ft 后多参数轨迹和完整原始报告。
+3. 用浏览器打开 `LMM_Report_Reader_v2.html`，把生成的 TXT 报告（或项目内样本）**拖入 / 选择**，即可可视化查看评分、载荷、风向姿态、100 ft 后多参数轨迹和完整原始报告。
 
 > 报告为纯本地文件，阅读器完全在浏览器本地解析，不会上传任何数据。
 
 ---
 
-## 五、Python 代码移植与改动（`starlux_logger.py`）
+## 五、Python 代码移植与改动（`starlux_LMM_pyver.py`）
 
 - **数据读取**：用 `SimConnect` 的 `AircraftRequests` 逐项读取（单次往返约 15ms、13 个变量一帧约 200ms、实际仅 ~4Hz），因此自定义了 `BatchSimConnect`——把所有 simvar 放进**同一条数据定义**，每帧一次往返读取全部 20 个变量，采样率恢复到 **16 Hz**（`1/16s` 精确整除）。
 - **垂直速度数据源**：弃用严重失真的 `VELOCITY_BODY_Y`（本环境约高 7~8 倍），改用世界系 `VELOCITY_WORLD_Y`（fps→m/s），与 X-Plane 的 `local_vy` 语义一致。

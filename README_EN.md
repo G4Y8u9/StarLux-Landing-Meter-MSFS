@@ -46,9 +46,9 @@ The rest of the flow is identical to Method 1: connect to MSFS → monitor landi
 
 ## 1. About
 
-StarLux Landing Meter is a flight-sim debrief tool: right after the main gear touches down, it automatically computes the **touchdown sink rate (FPM)** and **landing load (G)**, outputs a rating (NICE / STABLE / ATTENTION / UNSTABLE), and also captures the flare trajectory after 100 ft, bounce detection, wind & attitude and other debrief data.
+StarLux-Landing-Meter-MSFS is a flight-sim debrief tool: right after the main gear touches down, it automatically computes the **touchdown sink rate (FPM)** and **landing load (G)**, outputs a rating (NICE / STABLE / ATTENTION / UNSTABLE), and also captures the flare trajectory after 100 ft, bounce detection, wind & attitude and other debrief data.
 
-The original add-on runs inside X-Plane via FlyWithLua. This port instead uses a **Python script that reads MSFS data through SimConnect**, generates TXT reports in the same format as the Lua version, and visualizes them with the bundled HTML report reader.
+The [original](https://github.com/Starlux531/StarLux-Landing-Meter) add-on runs inside X-Plane via FlyWithLua. This port instead uses a **Python script that reads MSFS data through SimConnect**, generates TXT reports in the same format as the Lua version, and visualizes them with the bundled HTML report reader.
 
 > **Algorithm notes**: the core algorithms (three-chain FPM validation, AGL geometric closure, G-load / impulse consistency, flare curve, bounce scoring, etc.) are a faithful reproduction of the original Lua project. See the [original repository](https://github.com/Starlux531/StarLux-Landing-Meter) for the formulas and design rationale.
 
@@ -65,12 +65,6 @@ The original add-on runs inside X-Plane via FlyWithLua. This port instead uses a
    pip install SimConnect
    ```
 
-- **Optional dependency** (only needed to run the tray launcher `starlux_tray_launcher.py`):
-
-   ```bash
-   pip install pystray pillow
-   ```
-
 - **Simulator**: Microsoft Flight Simulator 2020 / 2024 (start the game and load an aircraft before launching the program)
 
 ---
@@ -80,16 +74,10 @@ The original add-on runs inside X-Plane via FlyWithLua. This port instead uses a
 | File | Description |
 | --- | --- |
 | `starlux_LMM_pyver.py` | Main Python source: connects to MSFS, samples, analyses landings, writes TXT reports |
-| `starlux_tray_launcher.py` | Tray launcher source: windowed UI + system tray, bilingual EN/CN (the exe is built from this) |
-| `StarLux_LMM.spec` | PyInstaller build config (onefile / noconsole / icon) |
-| `make_icon.py` | Generates the multi-size `starlux_icon.ico` from `1.png` |
-| `starlux_icon.ico` | App icon (shared by desktop / window / tray) |
 | `LMM_Report_Reader_v2.html` | Latest local HTML report reader (bilingual EN/CN, shipped with Releases) |
-| `LMM_Report_Reader_Light.html` | Report reader (light / compact variant, same source as v2) |
-| `LMM_Report_Reader.html` | Report reader (early version) |
-| `Starlux_Report_2026-08-19_16-13-45.txt` | A real-landing report **sample** — drag it into the HTML reader to see the effect |
+| `Starlux_Report_2026-08-21_15-15-03.txt` | A real-landing report **sample** — drag it into the HTML reader to see the effect |
 
-`dist/` (build output, published with Releases):
+Releases:
 
 | File | Description |
 | --- | --- |
@@ -104,13 +92,13 @@ The original add-on runs inside X-Plane via FlyWithLua. This port instead uses a
    - **exe**: double-click `StarLux-Landing-Meter-MSFS.exe` from the Release;
    - **Python**: `python starlux_LMM_pyver.py`.
 2. Once connected, the program monitors at 16 Hz. The instant the main gear touches down it starts the landing analysis and, ~1.2 s after impact capture, writes the report and shows the save path in the window (default: desktop `Starlux_Report_*.txt`);
-3. Open `LMM_Report_Reader_v2.html` (release) or `LMM_Report_Reader_Light.html` in a browser and **drag / pick** the generated TXT report (or the sample) to review the rating, load, wind & attitude, the 100 ft multi-parameter trajectory, and the full raw report.
+3. Open `LMM_Report_Reader_v2.html` in a browser and **drag / pick** the generated TXT report (or the sample) to review the rating, load, wind & attitude, the 100 ft multi-parameter trajectory, and the full raw report.
 
 > Reports are purely local; the reader parses everything in your browser and uploads nothing.
 
 ---
 
-## 5. Python port & changes (`starlux_logger.py`)
+## 5. Python port & changes (`starlux_LMM_pyver.py`)
 
 - **Data reading**: the stock `SimConnect.AircraftRequests` reads variables one by one (~15 ms per round trip; 13 variables ≈ 200 ms per frame, i.e. only ~4 Hz), so a custom `BatchSimConnect` was added — all simvars go into **one data definition**, every frame reads all 20 variables in a single round trip, restoring the sampling rate to **16 Hz** (exactly `1/16 s`).
 - **Vertical speed source**: the severely distorted `VELOCITY_BODY_Y` (roughly 7–8× too high in this environment) is dropped in favour of world-axis `VELOCITY_WORLD_Y` (fps→m/s), matching X-Plane's `local_vy` semantics.
@@ -144,6 +132,6 @@ The port and modifications **did not change the original algorithm logic** — t
 ## 8. License
 
 This project is licensed under the [Anti-996 License](https://github.com/996icu/996.ICU/blob/master/LICENSE).
-**Based on the MIT license, it additionally prohibits commercial use by companies that violate labor laws or promote 996 work schedules.**
+**Based on the MIT license, it additionally prohibits commercial use by companies that violate labor laws or promote "996" work schedules.**
 
 The original project is copyrighted by [Starlux531](https://github.com/Starlux531).
