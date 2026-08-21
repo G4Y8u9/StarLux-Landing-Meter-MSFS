@@ -2,7 +2,45 @@
 
 [![LICENSE](https://img.shields.io/badge/license-Anti%20996-blue.svg)](https://github.com/996icu/996.ICU/blob/master/LICENSE)
 
+**English:** [README_EN.md](README_EN.md)
+
 > 本仓库是 [Starlux531/StarLux-Landing-Meter](https://github.com/Starlux531/StarLux-Landing-Meter)（X-Plane 12 + FlyWithLua 落地率插件 v1.1）的 **Python + SimConnect 移植版**，用于 **Microsoft Flight Simulator 2020 / 2024**。
+
+---
+
+## 快速开始
+
+本仓库的 **Releases** 页面提供了打包好的程序（即 `dist` 文件夹内的两个文件），同时仓库内也保留了全部 Python 源码，因此有两种运行方式：
+
+| 方式 | 适用人群 | 需要安装 |
+| --- | --- | --- |
+| **① Release 里的 exe** | 不想折腾环境 | 无（零依赖，双击即用） |
+| **② 本地 Python 运行源码** | 想查看 / 修改代码 | `pip install SimConnect` |
+
+### 方式一：直接运行 Release 中的 exe（推荐，零依赖）
+
+1. 前往本仓库的 [Releases](https://github.com/G4Y8u9/StarLux-Landing-Meter-MSFS/releases) 页面，下载最新版本；
+2. Release 附件包含 **dist 文件夹内的两个文件**：
+   - `StarLux-Landing-Meter-MSFS.exe` —— 打包好的落地监视程序（含桌面 / 窗口 / 托盘图标，界面中英双语），双击即可运行；
+   - `LMM_Report_Reader_v2.html` —— 配套报告阅读器，用浏览器打开；
+3. 启动 MSFS 并加载好飞机，再运行 exe。程序会自动连接监听，主轮接地的瞬间自动分析，约 1.2 秒冲击采集结束后把报告保存到桌面 `Starlux_Report_*.txt`；
+4. 把生成的 TXT 报告拖入（或选择）`LMM_Report_Reader_v2.html`，即可可视化复盘评分、载荷、风向姿态、100 ft 后多参数轨迹与完整原始报告。
+
+### 方式二：本地 Python 运行（需安装 SimConnect 库）
+
+仓库本身带有 `starlux_LMM_pyver.py` 源码，可以本地运行：
+
+```bash
+# 安装依赖
+pip install SimConnect
+
+# 运行主程序（纯控制台）
+python starlux_LMM_pyver.py
+```
+
+其余流程与方式一完全相同：连接 MSFS → 监听落地 → 自动生成报告 → 用 `LMM_Report_Reader_v2.html`（或 `LMM_Report_Reader_Light.html`）打开报告复盘。
+
+> **说明**：exe 只是把 Python 环境与依赖（SimConnect / pystray / PIL / tkinter）打包好了，两种方式生成的报告与可视化结果完全一致。
 
 ---
 
@@ -18,6 +56,8 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
 
 ## 二、运行环境
 
+> 本小节针对**方式二（本地 Python 运行）**；方式一（Release 的 exe）无需任何安装。
+
 - **Python 版本**：3.13.x（开发与测试环境为 Python 3.13.7）
 - **依赖库**：[SimConnect](https://pypi.org/project/SimConnect/)
 
@@ -25,7 +65,13 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
    pip install SimConnect
    ```
 
-- **模拟器**：Microsoft Flight Simulator 2020 / 2024（建议先启动游戏并加载好飞机，再运行脚本）
+- **可选依赖**（仅运行 `starlux_tray_launcher.py` 托盘版启动器时需要）：
+
+   ```bash
+   pip install pystray pillow
+   ```
+
+- **模拟器**：Microsoft Flight Simulator 2020 / 2024（建议先启动游戏并加载好飞机，再运行程序）
 
 ---
 
@@ -33,23 +79,32 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
 
 | 文件 | 说明 |
 | --- | --- |
-| `starlux_LMM_pyver.py` | Python 主程序：连接 MSFS、采样、落地分析、生成 TXT 报告 |
-| `LMM_Report_Reader.html` | 本地 HTML 报告阅读器（由原项目模板修改而来） |
-| `Starlux_Report_2026-08-02_23-02-10.txt` | 一份真实落地的报告**样本**，可直接拖入 HTML 阅读器查看效果 |
+| `starlux_LMM_pyver.py` | Python 主程序源码：连接 MSFS、采样、落地分析、生成 TXT 报告 |
+| `starlux_tray_launcher.py` | 托盘版启动器源码：带窗口 + 系统托盘，界面中英双语（exe 即由此打包） |
+| `StarLux_LMM.spec` | PyInstaller 打包配置（onefile / noconsole / 图标） |
+| `make_icon.py` | 从 `1.png` 生成多尺寸 `starlux_icon.ico` 的脚本 |
+| `starlux_icon.ico` | 程序图标（桌面 / 窗口 / 托盘共用） |
+| `LMM_Report_Reader_v2.html` | 最新版本地 HTML 报告阅读器（中英双语，随 Release 发布） |
+| `LMM_Report_Reader_Light.html` | 报告阅读器（浅色精简版，与 v2 同源） |
+| `LMM_Report_Reader.html` | 报告阅读器（早期版本） |
+| `Starlux_Report_2026-08-19_16-13-45.txt` | 一份真实落地的报告**样本**，可直接拖入 HTML 阅读器查看效果 |
+
+`dist/`（打包产物，随 Release 发布）：
+
+| 文件 | 说明 |
+| --- | --- |
+| `StarLux-Landing-Meter-MSFS.exe` | 打包好的程序，双击即用，无需安装 Python / SimConnect |
+| `LMM_Report_Reader_v2.html` | 配套报告阅读器，双击用浏览器打开即可 |
 
 ---
 
 ## 四、使用方法
 
-1. 启动 MSFS，加载飞机；
-2. 运行 Python 程序：
-
-   ```bash
-   python starlux_LMM_pyver.py
-   ```
-
-3. 程序连接 MSFS 后开始以 16 Hz 监听。主轮接地的瞬间自动触发起落分析，约 1.2 秒冲击采集结束后自动生成报告并在控制台提示保存路径（默认保存到桌面 `Starlux_Report_*.txt`）；
-4. 用浏览器打开 `LMM_Report_Reader.html`，把生成的 TXT 报告（或项目内样本）**拖入 / 选择**，即可可视化查看评分、载荷、风向姿态、100 ft 后多参数轨迹和完整原始报告。
+1. 启动 MSFS，加载飞机（两种运行方式任选其一，见上文“快速开始”）：
+   - **exe 方式**：直接双击 Release 里的 `StarLux-Landing-Meter-MSFS.exe`；
+   - **Python 方式**：`python starlux_LMM_pyver.py`。
+2. 程序连接 MSFS 后开始以 16 Hz 监听。主轮接地的瞬间自动触发起落分析，约 1.2 秒冲击采集结束后自动生成报告并在窗口提示保存路径（默认保存到桌面 `Starlux_Report_*.txt`）；
+3. 用浏览器打开 `LMM_Report_Reader_v2.html`（Release 版）或 `LMM_Report_Reader_Light.html`，把生成的 TXT 报告（或项目内样本）**拖入 / 选择**，即可可视化查看评分、载荷、风向姿态、100 ft 后多参数轨迹和完整原始报告。
 
 > 报告为纯本地文件，阅读器完全在浏览器本地解析，不会上传任何数据。
 
@@ -66,12 +121,13 @@ StarLux 落地率插件（Landing Meter）是一款飞行模拟复盘工具：�
 
 ---
 
-## 六、HTML 报告阅读器改动（`LMM_Report_Reader.html`）
+## 六、HTML 报告阅读器改动（`LMM_Report_Reader_v2.html`）
 
 - **修复解析 bug**：`parseNumber` 改为只解析"以数字开头"的值，避免把"使用全局P75"里的 75 误显示成 75 G；横滚"左倾/右倾"文字在前改为专用 `anyNumber` 提取。
 - **交互**：首页加号 `＋` 可点击选择文件；拖拽仅在有真实文件时才触发导入（在原始 TXT 里拖选文字不再误报"没有找到 TXT 文件"）。
+- **中英双语切换**：新增右上角一键中英切换按钮；界面文案与报告内嵌的中文取值（评价、下降率来源、相对风、横滚、轨迹结论、弹跳等）会实时翻译为英文。
 - **布局调整**：删除了机场/跑道/机型等未实现识别的内容显示；删除"跑道触地点"卡片、"下载原始 TXT"按钮与上下文切换按钮；着陆上下文与图表区域撑满卡片；"完整原始 TXT"默认展开。
-- **页脚**：版本标记为 v1.1g4，并附原项目与本仓库作者的链接。
+- **页脚**：版本标记为 v2，并附原项目与本仓库作者的链接。
 
 ---
 
