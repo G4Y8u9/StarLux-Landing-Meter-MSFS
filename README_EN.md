@@ -38,7 +38,7 @@ pip install SimConnect
 python starlux_LMM_pyver.py
 ```
 
-The rest of the flow is identical to Method 1: connect to MSFS → monitor landings → auto-generate the report → open it with `LMM_Report_Reader_v2.html` (or `LMM_Report_Reader_Light.html`).
+The rest of the flow is identical to Method 1: connect to MSFS → monitor landings → auto-generate the report → open it with `LMM_Report_Reader_v2.html`.
 
 > **Note**: the exe is simply the Python environment with its dependencies (SimConnect / pystray / PIL / tkinter) bundled. Both methods produce exactly the same reports and visualization.
 
